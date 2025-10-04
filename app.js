@@ -8,13 +8,24 @@ const columnDefs = [
         field: "name", 
         rowDrag: true,
         cellRenderer: 'agGroupCellRenderer',
+        editable: true,
         valueSetter: params => { // Magic for adding new rows
             params.data.name = params.newValue;
             const rowIndex = params.node.rowIndex;
             const lastRowIndex = gridOptions.api.getLastDisplayedRow();
-            if (rowIndex === lastRowIndex) {
+            if (rowIndex === lastRowIndex && params.newValue && params.newValue.trim() !== '') {
                 const newId = getNextId();
-                gridOptions.api.applyTransaction({ add: [{ id: newId, name: '' }] });
+                const newRow = { 
+                    id: newId, 
+                    name: '', 
+                    duration: 1, 
+                    start: '', 
+                    finish: '', 
+                    predecessors: '', 
+                    resource: '', 
+                    notes: '' 
+                };
+                gridOptions.api.applyTransaction({ add: [newRow] });
             }
             return true;
         }
@@ -59,11 +70,13 @@ const gridOptions = {
 
 function getNextId() {
     let maxId = 0;
-    gridOptions.api.forEachNode(node => {
-        if (node.data && node.data.id > maxId) {
-            maxId = node.data.id;
-        }
-    });
+    if (gridOptions.api) {
+        gridOptions.api.forEachNode(node => {
+            if (node.data && node.data.id > maxId) {
+                maxId = node.data.id;
+            }
+        });
+    }
     return maxId + 1;
 }
 
@@ -332,14 +345,53 @@ function loadProject() {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     let rowData = [];
     if (savedData) {
-        rowData = JSON.parse(savedData);
+        try {
+            rowData = JSON.parse(savedData);
+        } catch (e) {
+            console.error('Error parsing saved data:', e);
+            rowData = [];
+        }
     }
     
-    // Ensure there's at least one empty row to start typing
-    if (rowData.length === 0 || rowData[rowData.length-1].name !== '') {
-         rowData.push({ id: getNextId(), name: '' });
+    // Always ensure there's at least one empty row to start typing
+    if (rowData.length === 0) {
+        // Add a sample task to help users understand how to use it
+        rowData.push({ 
+            id: 1, 
+            name: 'Sample Task - Click to edit', 
+            duration: 5, 
+            start: '', 
+            finish: '', 
+            predecessors: '', 
+            resource: 'Team Member', 
+            notes: 'This is a sample task. Click on any cell to edit it!' 
+        });
+        // Add an empty row for new tasks
+        rowData.push({ 
+            id: 2, 
+            name: '', 
+            duration: 1, 
+            start: '', 
+            finish: '', 
+            predecessors: '', 
+            resource: '', 
+            notes: '' 
+        });
+    } else if (rowData[rowData.length-1].name !== '') {
+        // Add a new empty row if the last row has content
+        rowData.push({ 
+            id: getNextId(), 
+            name: '', 
+            duration: 1, 
+            start: '', 
+            finish: '', 
+            predecessors: '', 
+            resource: '', 
+            notes: '' 
+        });
     }
     
+    console.log('Loading project with', rowData.length, 'rows');
     gridOptions.api.setRowData(rowData);
     updateGantt(rowData);
 }
