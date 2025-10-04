@@ -4,13 +4,30 @@ const LOCAL_STORAGE_KEY = 'myProjectData';
 
 // --- AG GRID SETUP ---
 const columnDefs = [
-    { 
-        field: "name", 
-        headerName: "Tasks",
-        rowDrag: true,
-        editable: true,
-        width: 250,
+    { field: "duration", headerName: "Dur", width: 60, editable: true, valueParser: p => parseInt(p.newValue) || 0 },
+    { field: "start", headerName: "Start", width: 80, editable: true },
+    { field: "finish", headerName: "Finish", width: 80, editable: false },
+    { field: "predecessors", headerName: "Pred", width: 80, editable: true },
+    { field: "resource", headerName: "Resource", width: 100, editable: true },
+    { field: "notes", headerName: "Notes", editable: true, flex: 1, width: 150 },
+];
+
+const gridOptions = {
+    columnDefs: columnDefs,
+    defaultColDef: { resizable: true },
+    rowData: [],
+    rowSelection: 'multiple',
+    suppressMoveWhenRowDragging: false,
+    treeData: true,
+    autoGroupColumnDef: {
+        headerName: 'Tasks',
+        minWidth: 250,
         cellRenderer: 'agGroupCellRenderer',
+        cellRendererParams: {
+            suppressCount: false,
+            checkbox: false
+        },
+        editable: true,
         valueSetter: params => { // Magic for adding new rows
             params.data.name = params.newValue;
             const rowIndex = params.node.rowIndex;
@@ -32,21 +49,6 @@ const columnDefs = [
             return true;
         }
     },
-    { field: "duration", headerName: "Dur", width: 60, editable: true, valueParser: p => parseInt(p.newValue) || 0 },
-    { field: "start", headerName: "Start", width: 80, editable: true },
-    { field: "finish", headerName: "Finish", width: 80, editable: false },
-    { field: "predecessors", headerName: "Pred", width: 80, editable: true },
-    { field: "resource", headerName: "Resource", width: 100, editable: true },
-    { field: "notes", headerName: "Notes", editable: true, flex: 1, width: 150 },
-];
-
-const gridOptions = {
-    columnDefs: columnDefs,
-    defaultColDef: { resizable: true },
-    rowData: [],
-    rowSelection: 'multiple',
-    suppressMoveWhenRowDragging: false,
-    treeData: true,
     getDataPath: data => {
         // Simple tree structure based on parent_id
         const path = [];
@@ -99,10 +101,10 @@ function onCellKeyDown(event) {
         
         // Move focus to the new row
         setTimeout(() => {
-            gridOptions.api.setFocusedCell(currentRowIndex + 1, 'name');
+            gridOptions.api.setFocusedCell(currentRowIndex + 1, 'ag-Grid-AutoColumn');
             gridOptions.api.startEditingCell({
                 rowIndex: currentRowIndex + 1,
-                colKey: 'name'
+                colKey: 'ag-Grid-AutoColumn'
             });
         }, 50);
         
@@ -137,10 +139,10 @@ function insertRowAbove() {
     
     // Move focus to the new row
     setTimeout(() => {
-        gridOptions.api.setFocusedCell(rowIndex, 'name');
+        gridOptions.api.setFocusedCell(rowIndex, 'ag-Grid-AutoColumn');
         gridOptions.api.startEditingCell({
             rowIndex: rowIndex,
-            colKey: 'name'
+            colKey: 'ag-Grid-AutoColumn'
         });
     }, 50);
     
@@ -175,10 +177,10 @@ function insertRowBelow() {
     
     // Move focus to the new row
     setTimeout(() => {
-        gridOptions.api.setFocusedCell(rowIndex + 1, 'name');
+        gridOptions.api.setFocusedCell(rowIndex + 1, 'ag-Grid-AutoColumn');
         gridOptions.api.startEditingCell({
             rowIndex: rowIndex + 1,
-            colKey: 'name'
+            colKey: 'ag-Grid-AutoColumn'
         });
     }, 50);
     
@@ -752,6 +754,9 @@ function updateGantt(tasks) {
                 return;
             }
             
+            // Create a simple test first
+            console.log('Creating Gantt with tasks:', ganttTasks);
+            
             gantt = new Gantt("#gantt", ganttTasks, {
                 bar_height: 20,
                 padding: 18,
@@ -759,6 +764,7 @@ function updateGantt(tasks) {
                 date_format: 'YYYY-MM-DD'
             });
             console.log('Gantt chart created successfully with', ganttTasks.length, 'tasks');
+            showMessage(`Gantt chart updated with ${ganttTasks.length} tasks`, 'success');
         } catch (e) {
             console.error('Error creating Gantt chart:', e);
             showMessage('Error creating Gantt chart: ' + e.message, 'error');
@@ -766,6 +772,9 @@ function updateGantt(tasks) {
     } else {
         console.log('No valid tasks for Gantt chart - tasks need names and dates');
         showMessage('Add task names and dates to see Gantt chart', 'info');
+        
+        // Show a simple test message in the Gantt area
+        ganttContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Add task names and dates, then click Recalculate to see Gantt chart</div>';
     }
 }
 
