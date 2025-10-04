@@ -4,7 +4,22 @@
     <meta charset="UTF-8">
     <title>Fluid Project Tracker</title>
     <!-- AG Grid -->
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
+    <script>
+        // Fallback for AG Grid if CDN fails
+        if (typeof agGrid === 'undefined') {
+            console.log('Loading AG Grid fallback...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/ag-grid-community@31.0.0/dist/ag-grid-community.min.js';
+            script.onload = function() {
+                console.log('AG Grid fallback loaded');
+            };
+            script.onerror = function() {
+                console.error('AG Grid fallback also failed');
+            };
+            document.head.appendChild(script);
+        }
+    </script>
     <!-- Frappe Gantt -->
     <script src="frappe-gantt.min.js"></script>
     <link rel="stylesheet" href="frappe-gantt.css" />

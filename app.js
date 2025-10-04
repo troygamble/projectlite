@@ -512,17 +512,48 @@ function updateGantt(tasks) {
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    const gridDiv = document.querySelector('#myGrid');
-    new agGrid.Grid(gridDiv, gridOptions);
-    loadProject();
+    console.log('DOM loaded, initializing app...');
     
-    // Set up auto-export every 5 minutes
-    setInterval(autoExport, 5 * 60 * 1000); // 5 minutes
+    // Check if AG Grid is loaded
+    if (typeof agGrid === 'undefined') {
+        console.error('AG Grid not loaded!');
+        showMessage('Error: AG Grid library failed to load. Please refresh the page.', 'error');
+        return;
+    }
     
-    // Auto-export on page unload
-    window.addEventListener('beforeunload', () => {
-        autoExport();
-    });
+    // Check if Gantt is loaded
+    if (typeof Gantt === 'undefined') {
+        console.error('Frappe Gantt not loaded!');
+        showMessage('Warning: Gantt chart library failed to load. Grid will work but Gantt may not display.', 'warning');
+    }
+    
+    try {
+        const gridDiv = document.querySelector('#myGrid');
+        if (!gridDiv) {
+            console.error('Grid container not found!');
+            return;
+        }
+        
+        console.log('Creating AG Grid...');
+        new agGrid.Grid(gridDiv, gridOptions);
+        console.log('AG Grid created successfully');
+        
+        loadProject();
+        console.log('Project loaded');
+        
+        // Set up auto-export every 5 minutes
+        setInterval(autoExport, 5 * 60 * 1000); // 5 minutes
+        
+        // Auto-export on page unload
+        window.addEventListener('beforeunload', () => {
+            autoExport();
+        });
+        
+        console.log('App initialized successfully');
+    } catch (error) {
+        console.error('Error initializing app:', error);
+        showMessage('Error initializing application: ' + error.message, 'error');
+    }
 });
 
 // Keyboard shortcuts
