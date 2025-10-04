@@ -13,78 +13,8 @@
 ## Project Structure
 
 ```
-├── .git
-│   ├── hooks
-│   │   ├── applypatch-msg.sample
-│   │   ├── commit-msg.sample
-│   │   ├── fsmonitor-watchman.sample
-│   │   ├── post-update.sample
-│   │   ├── pre-applypatch.sample
-│   │   ├── pre-commit.sample
-│   │   ├── pre-merge-commit.sample
-│   │   ├── pre-push.sample
-│   │   ├── pre-rebase.sample
-│   │   ├── pre-receive.sample
-│   │   ├── prepare-commit-msg.sample
-│   │   ├── push-to-checkout.sample
-│   │   ├── sendemail-validate.sample
-│   │   └── update.sample
-│   ├── info
-│   │   └── exclude
-│   ├── logs
-│   │   ├── refs
-│   │   └── HEAD
-│   ├── objects
-│   │   ├── 04
-│   │   ├── 06
-│   │   ├── 10
-│   │   ├── 12
-│   │   ├── 15
-│   │   ├── 18
-│   │   ├── 1a
-│   │   ├── 1f
-│   │   ├── 2b
-│   │   ├── 30
-│   │   ├── 3a
-│   │   ├── 3c
-│   │   ├── 41
-│   │   ├── 4d
-│   │   ├── 57
-│   │   ├── 5b
-│   │   ├── 60
-│   │   ├── 65
-│   │   ├── 67
-│   │   ├── 7a
-│   │   ├── 8f
-│   │   ├── 99
-│   │   ├── a0
-│   │   ├── b6
-│   │   ├── ba
-│   │   ├── bc
-│   │   ├── c9
-│   │   ├── d0
-│   │   ├── d9
-│   │   ├── da
-│   │   ├── db
-│   │   ├── e5
-│   │   ├── ed
-│   │   ├── f0
-│   │   ├── f1
-│   │   ├── f3
-│   │   ├── fc
-│   │   ├── fe
-│   │   ├── info
-│   │   └── pack
-│   ├── refs
-│   │   ├── heads
-│   │   ├── remotes
-│   │   └── tags
-│   ├── COMMIT_EDITMSG
-│   ├── HEAD
-│   ├── config
-│   ├── description
-│   └── index
-├── README.md
+├── __pycache__
+│   └── project_out.cpython-312.pyc
 ├── app.js
 ├── frappe-gantt.css
 ├── frappe-gantt.min.js
@@ -239,13 +169,30 @@ const LOCAL_STORAGE_KEY = 'myProjectData';
 
 // --- AG GRID SETUP ---
 const columnDefs = [
-    { 
-        field: "name", 
-        headerName: "Tasks",
-        rowDrag: true,
-        editable: true,
-        width: 250,
+    { field: "duration", headerName: "Dur", width: 60, editable: true, valueParser: p => parseInt(p.newValue) || 0 },
+    { field: "start", headerName: "Start", width: 80, editable: true },
+    { field: "finish", headerName: "Finish", width: 80, editable: false },
+    { field: "predecessors", headerName: "Pred", width: 80, editable: true },
+    { field: "resource", headerName: "Resource", width: 100, editable: true },
+    { field: "notes", headerName: "Notes", editable: true, flex: 1, width: 150 },
+];
+
+const gridOptions = {
+    columnDefs: columnDefs,
+    defaultColDef: { resizable: true },
+    rowData: [],
+    rowSelection: 'multiple',
+    suppressMoveWhenRowDragging: false,
+    treeData: true,
+    autoGroupColumnDef: {
+        headerName: 'Tasks',
+        minWidth: 250,
         cellRenderer: 'agGroupCellRenderer',
+        cellRendererParams: {
+            suppressCount: false,
+            checkbox: false
+        },
+        editable: true,
         valueSetter: params => { // Magic for adding new rows
             params.data.name = params.newValue;
             const rowIndex = params.node.rowIndex;
@@ -267,21 +214,6 @@ const columnDefs = [
             return true;
         }
     },
-    { field: "duration", headerName: "Dur", width: 60, editable: true, valueParser: p => parseInt(p.newValue) || 0 },
-    { field: "start", headerName: "Start", width: 80, editable: true },
-    { field: "finish", headerName: "Finish", width: 80, editable: false },
-    { field: "predecessors", headerName: "Pred", width: 80, editable: true },
-    { field: "resource", headerName: "Resource", width: 100, editable: true },
-    { field: "notes", headerName: "Notes", editable: true, flex: 1, width: 150 },
-];
-
-const gridOptions = {
-    columnDefs: columnDefs,
-    defaultColDef: { resizable: true },
-    rowData: [],
-    rowSelection: 'multiple',
-    suppressMoveWhenRowDragging: false,
-    treeData: true,
     getDataPath: data => {
         // Simple tree structure based on parent_id
         const path = [];
@@ -334,10 +266,10 @@ function onCellKeyDown(event) {
         
         // Move focus to the new row
         setTimeout(() => {
-            gridOptions.api.setFocusedCell(currentRowIndex + 1, 'name');
+            gridOptions.api.setFocusedCell(currentRowIndex + 1, 'ag-Grid-AutoColumn');
             gridOptions.api.startEditingCell({
                 rowIndex: currentRowIndex + 1,
-                colKey: 'name'
+                colKey: 'ag-Grid-AutoColumn'
             });
         }, 50);
         
@@ -372,10 +304,10 @@ function insertRowAbove() {
     
     // Move focus to the new row
     setTimeout(() => {
-        gridOptions.api.setFocusedCell(rowIndex, 'name');
+        gridOptions.api.setFocusedCell(rowIndex, 'ag-Grid-AutoColumn');
         gridOptions.api.startEditingCell({
             rowIndex: rowIndex,
-            colKey: 'name'
+            colKey: 'ag-Grid-AutoColumn'
         });
     }, 50);
     
@@ -410,10 +342,10 @@ function insertRowBelow() {
     
     // Move focus to the new row
     setTimeout(() => {
-        gridOptions.api.setFocusedCell(rowIndex + 1, 'name');
+        gridOptions.api.setFocusedCell(rowIndex + 1, 'ag-Grid-AutoColumn');
         gridOptions.api.startEditingCell({
             rowIndex: rowIndex + 1,
-            colKey: 'name'
+            colKey: 'ag-Grid-AutoColumn'
         });
     }, 50);
     
@@ -987,6 +919,9 @@ function updateGantt(tasks) {
                 return;
             }
             
+            // Create a simple test first
+            console.log('Creating Gantt with tasks:', ganttTasks);
+            
             gantt = new Gantt("#gantt", ganttTasks, {
                 bar_height: 20,
                 padding: 18,
@@ -994,6 +929,7 @@ function updateGantt(tasks) {
                 date_format: 'YYYY-MM-DD'
             });
             console.log('Gantt chart created successfully with', ganttTasks.length, 'tasks');
+            showMessage(`Gantt chart updated with ${ganttTasks.length} tasks`, 'success');
         } catch (e) {
             console.error('Error creating Gantt chart:', e);
             showMessage('Error creating Gantt chart: ' + e.message, 'error');
@@ -1001,6 +937,9 @@ function updateGantt(tasks) {
     } else {
         console.log('No valid tasks for Gantt chart - tasks need names and dates');
         showMessage('Add task names and dates to see Gantt chart', 'info');
+        
+        // Show a simple test message in the Gantt area
+        ganttContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Add task names and dates, then click Recalculate to see Gantt chart</div>';
     }
 }
 
@@ -1108,116 +1047,6 @@ document.addEventListener('keydown', e => {
                 style="stroke:grey; stroke-width:0.3" />
         </pattern>`;for(let i=new Date(this.gantt_start);i<=this.gantt_end;i.setDate(i.getDate()+1)){if(!this.config.ignored_dates.find(r=>r.getTime()==i.getTime())&&(!this.config.ignored_function||!this.config.ignored_function(i)))continue;let s=d.convert_scales(d.diff(i,this.gantt_start)+"d",this.config.unit)/this.config.step;this.config.ignored_positions.push(s*this.config.column_width),f("rect",{x:s*this.config.column_width,y:this.config.header_height,width:this.config.column_width,height:t,class:"ignored-bar",style:"fill: url(#diagonalHatch);",append_to:this.$svg})}this.highlight_current(this.config.view_mode)}create_el({left:t,top:e,width:i,height:s,id:r,classes:a,append_to:o,type:h}){let l=document.createElement(h||"div");for(let _ of a.split(" "))l.classList.add(_);return l.style.top=e+"px",l.style.left=t+"px",r&&(l.id=r),i&&(l.style.width=i+"px"),s&&(l.style.height=s+"px"),o&&o.appendChild(l),l}make_dates(){this.get_dates_to_draw().forEach((t,e)=>{if(t.lower_text){let i=this.create_el({left:t.x,top:t.lower_y,classes:"lower-text date_"+k(t.formatted_date),append_to:this.$lower_header});i.innerText=t.lower_text}if(t.upper_text){let i=this.create_el({left:t.x,top:t.upper_y,classes:"upper-text",append_to:this.$upper_header});i.innerText=t.upper_text}}),this.upperTexts=Array.from(this.$container.querySelectorAll(".upper-text"))}get_dates_to_draw(){let t=null;return this.dates.map((i,s)=>{const r=this.get_date_info(i,t,s);return t=r,r})}get_date_info(t,e){let i=e?e.date:null;this.config.column_width;const s=e?e.x+e.column_width:0;let r=this.config.view_mode.upper_text,a=this.config.view_mode.lower_text;return r?typeof r=="string"&&(this.config.view_mode.upper_text=o=>d.format(o,r,this.options.language)):this.config.view_mode.upper_text=()=>"",a?typeof a=="string"&&(this.config.view_mode.lower_text=o=>d.format(o,a,this.options.language)):this.config.view_mode.lower_text=()=>"",{date:t,formatted_date:k(d.format(t,this.config.date_format,this.options.language)),column_width:this.config.column_width,x:s,upper_text:this.config.view_mode.upper_text(t,i,this.options.language),lower_text:this.config.view_mode.lower_text(t,i,this.options.language),upper_y:17,lower_y:this.options.upper_header_height+5}}make_bars(){this.bars=this.tasks.map(t=>{const e=new C(this,t);return this.layers.bar.appendChild(e.group),e})}make_arrows(){this.arrows=[];for(let t of this.tasks){let e=[];e=t.dependencies.map(i=>{const s=this.get_task(i);if(!s)return;const r=new q(this,this.bars[s._index],this.bars[t._index]);return this.layers.arrow.appendChild(r.element),r}).filter(Boolean),this.arrows=this.arrows.concat(e)}}map_arrows_on_bars(){for(let t of this.bars)t.arrows=this.arrows.filter(e=>e.from_task.task.id===t.task.id||e.to_task.task.id===t.task.id)}set_dimensions(){const{width:t}=this.$svg.getBoundingClientRect(),e=this.$svg.querySelector(".grid .grid-row")?this.$svg.querySelector(".grid .grid-row").getAttribute("width"):0;t<e&&this.$svg.setAttribute("width",e)}set_scroll_position(t){if(this.options.infinite_padding&&(!t||t==="start")){let[a,...o]=this.get_start_end_positions();this.$container.scrollLeft=a;return}if(!t||t==="start")t=this.gantt_start;else if(t==="end")t=this.gantt_end;else{if(t==="today")return this.scroll_current();typeof t=="string"&&(t=d.parse(t))}const i=d.diff(t,this.gantt_start,this.config.unit)/this.config.step*this.config.column_width;this.$container.scrollTo({left:i-this.config.column_width/6,behavior:"smooth"}),this.$current&&this.$current.classList.remove("current-upper"),this.current_date=d.add(this.gantt_start,this.$container.scrollLeft/this.config.column_width,this.config.unit);let s=this.config.view_mode.upper_text(this.current_date,null,this.options.language),r=this.upperTexts.find(a=>a.textContent===s);this.current_date=d.add(this.gantt_start,(this.$container.scrollLeft+r.clientWidth)/this.config.column_width,this.config.unit),s=this.config.view_mode.upper_text(this.current_date,null,this.options.language),r=this.upperTexts.find(a=>a.textContent===s),r.classList.add("current-upper"),this.$current=r}scroll_current(){let t=this.get_closest_date();t&&this.set_scroll_position(t[0])}get_closest_date(){let t=new Date;if(t<this.gantt_start||t>this.gantt_end)return null;let e=new Date,i=this.$container.querySelector(".date_"+k(d.format(e,this.config.date_format,this.options.language))),s=0;for(;!i&&s<this.config.step;)e=d.add(e,-1,this.config.unit),i=this.$container.querySelector(".date_"+k(d.format(e,this.config.date_format,this.options.language))),s++;return[new Date(d.format(e,this.config.date_format,this.options.language)+" "),i]}bind_grid_click(){p.on(this.$container,"click",".grid-row, .grid-header, .ignored-bar, .holiday-highlight",()=>{this.unselect_all(),this.hide_popup()})}bind_holiday_labels(){const t=this.$container.querySelectorAll(".holiday-highlight");for(let e of t){const i=this.$container.querySelector(".label_"+e.classList[1]);if(!i)continue;let s;e.onmouseenter=r=>{s=setTimeout(()=>{i.classList.add("show"),i.style.left=(r.offsetX||r.layerX)+"px",i.style.top=(r.offsetY||r.layerY)+"px"},300)},e.onmouseleave=r=>{clearTimeout(s),i.classList.remove("show")}}}get_start_end_positions(){if(!this.bars.length)return[0,0,0];let{x:t,width:e}=this.bars[0].group.getBBox(),i=t,s=t,r=t+e;return Array.prototype.forEach.call(this.bars,function({group:a},o){let{x:h,width:l}=a.getBBox();h<i&&(i=h),h>s&&(s=h),h+l>r&&(r=h+l)}),[i,s,r]}bind_bar_events(){let t=!1,e=0,i=0,s=!1,r=!1,a=null,o=[];this.bar_being_dragged=null;const h=()=>t||s||r;this.$svg.onclick=_=>{_.target.classList.contains("grid-row")&&this.unselect_all()};let l=0;if(p.on(this.$svg,"mousemove",".bar-wrapper, .handle",_=>{this.bar_being_dragged===!1&&Math.abs((_.offsetX||_.layerX)-l)>10&&(this.bar_being_dragged=!0)}),p.on(this.$svg,"mousedown",".bar-wrapper, .handle",(_,g)=>{const c=p.closest(".bar-wrapper",g);g.classList.contains("left")?(s=!0,g.classList.add("visible")):g.classList.contains("right")?(r=!0,g.classList.add("visible")):g.classList.contains("bar-wrapper")&&(t=!0),this.popup&&this.popup.hide(),e=_.offsetX||_.layerX,_.offsetY||_.layerY,a=c.getAttribute("data-id");let u;this.options.move_dependencies?u=[a,...this.get_all_dependent_tasks(a)]:u=[a],o=u.map($=>this.get_bar($)),this.bar_being_dragged=!1,l=e,o.forEach($=>{const m=$.$bar;m.ox=m.getX(),m.oy=m.getY(),m.owidth=m.getWidth(),m.finaldx=0})}),this.options.infinite_padding){let _=!1;p.on(this.$container,"mousewheel",g=>{let c=this.$container.scrollWidth/2;if(!_&&g.currentTarget.scrollLeft<=c){let u=g.currentTarget.scrollLeft;_=!0,this.gantt_start=d.add(this.gantt_start,-this.config.extend_by_units,this.config.unit),this.setup_date_values(),this.render(),g.currentTarget.scrollLeft=u+this.config.column_width*this.config.extend_by_units,setTimeout(()=>_=!1,300)}if(!_&&g.currentTarget.scrollWidth-(g.currentTarget.scrollLeft+g.currentTarget.clientWidth)<=c){let u=g.currentTarget.scrollLeft;_=!0,this.gantt_end=d.add(this.gantt_end,this.config.extend_by_units,this.config.unit),this.setup_date_values(),this.render(),g.currentTarget.scrollLeft=u,setTimeout(()=>_=!1,300)}})}p.on(this.$container,"scroll",_=>{let g=[];const c=this.bars.map(({group:w})=>w.getAttribute("data-id"));let u;i&&(u=_.currentTarget.scrollLeft-i),this.current_date=d.add(this.gantt_start,_.currentTarget.scrollLeft/this.config.column_width*this.config.step,this.config.unit);let $=this.config.view_mode.upper_text(this.current_date,null,this.options.language),m=this.upperTexts.find(w=>w.textContent===$);this.current_date=d.add(this.gantt_start,(_.currentTarget.scrollLeft+m.clientWidth)/this.config.column_width*this.config.step,this.config.unit),$=this.config.view_mode.upper_text(this.current_date,null,this.options.language),m=this.upperTexts.find(w=>w.textContent===$),m!==this.$current&&(this.$current&&this.$current.classList.remove("current-upper"),m.classList.add("current-upper"),this.$current=m),i=_.currentTarget.scrollLeft;let[H,B,j]=this.get_start_end_positions();i>j+100?(this.$adjust.innerHTML="&larr;",this.$adjust.classList.remove("hide"),this.$adjust.onclick=()=>{this.$container.scrollTo({left:B,behavior:"smooth"})}):i+_.currentTarget.offsetWidth<H-100?(this.$adjust.innerHTML="&rarr;",this.$adjust.classList.remove("hide"),this.$adjust.onclick=()=>{this.$container.scrollTo({left:H,behavior:"smooth"})}):this.$adjust.classList.add("hide"),u&&(g=c.map(w=>this.get_bar(w)),this.options.auto_move_label&&g.forEach(w=>{w.update_label_position_on_horizontal_scroll({x:u,sx:_.currentTarget.scrollLeft})}))}),p.on(this.$svg,"mousemove",_=>{if(!h())return;const g=(_.offsetX||_.layerX)-e;o.forEach(c=>{const u=c.$bar;u.finaldx=this.get_snap_position(g,u.ox),this.hide_popup(),s?a===c.task.id?c.update_bar_position({x:u.ox+u.finaldx,width:u.owidth-u.finaldx}):c.update_bar_position({x:u.ox+u.finaldx}):r?a===c.task.id&&c.update_bar_position({width:u.owidth+u.finaldx}):t&&!this.options.readonly&&!this.options.readonly_dates&&c.update_bar_position({x:u.ox+u.finaldx})})}),document.addEventListener("mouseup",()=>{var _,g,c;t=!1,s=!1,r=!1,(c=(g=(_=this.$container.querySelector(".visible"))==null?void 0:_.classList)==null?void 0:g.remove)==null||c.call(g,"visible")}),p.on(this.$svg,"mouseup",_=>{this.bar_being_dragged=null,o.forEach(g=>{g.$bar.finaldx&&(g.date_changed(),g.compute_progress(),g.set_action_completed())})}),this.bind_bar_progress()}bind_bar_progress(){let t=0,e=null,i=null,s=null,r=null;p.on(this.$svg,"mousedown",".handle.progress",(o,h)=>{e=!0,t=o.offsetX||o.layerX,y_on_start=o.offsetY||o.layerY;const _=p.closest(".bar-wrapper",h).getAttribute("data-id");i=this.get_bar(_),s=i.$bar_progress,r=i.$bar,s.finaldx=0,s.owidth=s.getWidth(),s.min_dx=-s.owidth,s.max_dx=r.getWidth()-s.getWidth()});const a=this.config.ignored_positions.map(o=>[o,o+this.config.column_width]);p.on(this.$svg,"mousemove",o=>{if(!e)return;let h=o.offsetX||o.layerX;if(h>t){let g=a.find(([c,u])=>h>=c&&h<u);for(;g;)h=g[1],g=a.find(([c,u])=>h>=c&&h<u)}else{let g=a.find(([c,u])=>h>c&&h<=u);for(;g;)h=g[0],g=a.find(([c,u])=>h>c&&h<=u)}let _=h-t;_>s.max_dx&&(_=s.max_dx),_<s.min_dx&&(_=s.min_dx),s.setAttribute("width",s.owidth+_),p.attr(i.$handle_progress,"cx",s.getEndX()),s.finaldx=_}),p.on(this.$svg,"mouseup",()=>{e=!1,s&&s.finaldx&&(s.finaldx=0,i.progress_changed(),i.set_action_completed(),i=null,s=null,r=null)})}get_all_dependent_tasks(t){let e=[],i=[t];for(;i.length;){const s=i.reduce((r,a)=>(r=r.concat(this.dependency_map[a]),r),[]);e=e.concat(s),i=s.filter(r=>!i.includes(r))}return e.filter(Boolean)}get_snap_position(t,e){let i=1;const s=this.options.snap_at||this.config.view_mode.snap_at||"1d";if(s!=="unit"){const{duration:_,scale:g}=d.parse_duration(s);i=d.convert_scales(this.config.view_mode.step,g)/_}const r=t%(this.config.column_width/i);let a=t-r+(r<this.config.column_width/i*2?0:this.config.column_width/i),o=e+a;const h=a>0?1:-1;let l=this.get_ignored_region(o,h);for(;l.length;)o+=this.config.column_width*h,l=this.get_ignored_region(o,h),l.length||(o-=this.config.column_width*h);return o-e}get_ignored_region(t,e=1){return e===1?this.config.ignored_positions.filter(i=>t>i&&t<=i+this.config.column_width):this.config.ignored_positions.filter(i=>t>=i&&t<i+this.config.column_width)}unselect_all(){this.popup&&this.popup.parent.classList.add("hide"),this.$container.querySelectorAll(".date-range-highlight").forEach(t=>t.classList.add("hide"))}view_is(t){return typeof t=="string"?this.config.view_mode.name===t:Array.isArray(t)?t.some(view_is):this.config.view_mode.name===t.name}get_task(t){return this.tasks.find(e=>e.id===t)}get_bar(t){return this.bars.find(e=>e.task.id===t)}show_popup(t){this.options.popup!==!1&&(this.popup||(this.popup=new F(this.$popup_wrapper,this.options.popup,this)),this.popup.show(t))}hide_popup(){this.popup&&this.popup.hide()}trigger_event(t,e){this.options["on_"+t]&&this.options["on_"+t].apply(this,e)}get_oldest_starting_date(){return this.tasks.length?this.tasks.map(t=>t._start).reduce((t,e)=>e<=t?e:t):new Date}clear(){var t,e,i,s,r,a,o,h,l,_;this.$svg.innerHTML="",(e=(t=this.$header)==null?void 0:t.remove)==null||e.call(t),(s=(i=this.$side_header)==null?void 0:i.remove)==null||s.call(i),(a=(r=this.$current_highlight)==null?void 0:r.remove)==null||a.call(r),(h=(o=this.$extras)==null?void 0:o.remove)==null||h.call(o),(_=(l=this.popup)==null?void 0:l.hide)==null||_.call(l)}}S.VIEW_MODE={HOUR:b[0],QUARTER_DAY:b[1],HALF_DAY:b[2],DAY:b[3],WEEK:b[4],MONTH:b[5],YEAR:b[6]};function z(n){return n.name+"_"+Math.random().toString(36).slice(2,12)}function k(n){return n.replaceAll(" ","_").replaceAll(":","_").replaceAll(".","_")}return S});
 
-```
-
-## README.md
-
-**Location:** `README.md`
-
-```markdown
-# Fluid Project Tracker
-
-A 100% client-side project management tool that runs entirely in your browser. No server, no database, just pure JavaScript power!
-
-## 🚀 Features
-
-- **Excel-like Grid Interface** - Drag, drop, edit, and organize tasks
-- **Smart Calculations** - Automatic date scheduling and dependency management
-- **Visual Gantt Chart** - Interactive timeline view
-- **Data Persistence** - Multiple ways to save your work
-- **Import/Export** - JSON file support for backup and sharing
-
-## 📁 Files
-
-- `index.html` - Main application
-- `style.css` - Styling
-- `app.js` - Core logic
-- `frappe-gantt.css` - Gantt chart styling
-- `frappe-gantt.min.js` - Gantt chart library
-
-## 💾 Data Persistence Options
-
-### 1. Automatic LocalStorage (Default)
-- Data automatically saves to your browser's local storage
-- Persists between sessions on the same computer
-- Works offline
-- Status indicator shows save status
-
-### 2. Manual Export/Import
-- **Export to File** - Download your project as a JSON file
-- **Import from File** - Load a previously exported project
-- **Download Auto-Export** - Get the latest auto-saved version
-
-### 3. Auto-Export Feature
-- Automatically creates export data every 5 minutes
-- Triggers on page unload
-- Click "Download Auto-Export" to save the latest version
-- Perfect for GitHub Pages deployment
-
-## 🎯 How to Use
-
-1. **Open `index.html`** in any modern browser
-2. **Start typing** in the first row to add tasks
-3. **Use indentation** (Alt+Right/Left) to create hierarchy
-4. **Set predecessors** using task IDs (e.g., "1;3")
-5. **Click "Recalculate"** to update all dates
-6. **Export regularly** to backup your work
-
-## 🔧 GitHub Pages Deployment
-
-1. Upload all files to your GitHub repository
-2. Enable GitHub Pages in repository settings
-3. Your project will be available at `https://yourusername.github.io/repository-name`
-4. Use the export/import features to backup your data
-
-## ⌨️ Keyboard Shortcuts
-
-- **Alt + Right Arrow** - Indent selected tasks
-- **Alt + Left Arrow** - Outdent selected tasks
-- **Right-click** - Context menu for row operations
-
-## 📊 Data Format
-
-Projects are saved as JSON with this structure:
-```json
-{
-  "version": "1.0",
-  "exportDate": "2024-01-15T10:30:00.000Z",
-  "projectName": "My Project",
-  "tasks": [
-    {
-      "id": 1,
-      "name": "Task Name",
-      "duration": 5,
-      "start": "15/01/2024",
-      "finish": "19/01/2024",
-      "predecessors": "2;3",
-      "resource": "Team Member",
-      "notes": "Task notes"
-    }
-  ]
-}
-```
-
-## 🛠️ Technical Details
-
-- **No Dependencies** - Pure HTML, CSS, and JavaScript
-- **AG Grid** - Professional data grid component
-- **Frappe Gantt** - Beautiful Gantt chart library
-- **LocalStorage** - Browser-based data persistence
-- **Workday Calculations** - Excludes weekends from scheduling
-
-## 📝 Tips
-
-- Export your project regularly as a backup
-- Use the auto-export feature for peace of mind
-- Task IDs are automatically generated - use them for predecessors
-- The Gantt chart updates automatically when you recalculate
-- All data is stored locally - no server required!
-
----
-
-**Ready to start?** Just open `index.html` in your browser and begin managing your projects!
 ```
 
 ## Technical Implementation

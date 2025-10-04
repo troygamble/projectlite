@@ -16,8 +16,19 @@ def get_directory_tree(root_path, prefix="", max_depth=3, current_depth=0):
     tree = ""
     items = sorted(Path(root_path).iterdir(), key=lambda x: (x.is_file(), x.name))
     
-    for i, item in enumerate(items):
-        is_last = i == len(items) - 1
+    # Filter out unwanted directories and files
+    filtered_items = []
+    for item in items:
+        if item.name.startswith('.') and item.name != '.':  # Skip hidden files/folders like .git
+            continue
+        if item.name == 'README.md':  # Skip README
+            continue
+        if item.name == 'project_complete.md':  # Skip the generated output file
+            continue
+        filtered_items.append(item)
+    
+    for i, item in enumerate(filtered_items):
+        is_last = i == len(filtered_items) - 1
         current_prefix = "└── " if is_last else "├── "
         tree += f"{prefix}{current_prefix}{item.name}\n"
         
@@ -44,8 +55,7 @@ def generate_project_markdown(project_dir="."):
         "style.css", 
         "app.js",
         "frappe-gantt.css",
-        "frappe-gantt.min.js",
-        "README.md"
+        "frappe-gantt.min.js"
     ]
     
     # Start building markdown
