@@ -9,6 +9,7 @@ const columnDefs = [
         rowDrag: true,
         cellRenderer: 'agGroupCellRenderer',
         editable: true,
+        width: 200,
         valueSetter: params => { // Magic for adding new rows
             params.data.name = params.newValue;
             const rowIndex = params.node.rowIndex;
@@ -30,12 +31,12 @@ const columnDefs = [
             return true;
         }
     },
-    { field: "duration", headerName: "Duration", width: 100, editable: true, valueParser: p => parseInt(p.newValue) || 0 },
-    { field: "start", headerName: "Start", width: 120, editable: true },
-    { field: "finish", headerName: "Finish", width: 120, editable: false },
-    { field: "predecessors", headerName: "Predecessors", width: 120, editable: true },
-    { field: "resource", headerName: "Resource", width: 150, editable: true },
-    { field: "notes", headerName: "Notes", editable: true, flex: 1 },
+    { field: "duration", headerName: "Dur", width: 60, editable: true, valueParser: p => parseInt(p.newValue) || 0 },
+    { field: "start", headerName: "Start", width: 80, editable: true },
+    { field: "finish", headerName: "Finish", width: 80, editable: false },
+    { field: "predecessors", headerName: "Pred", width: 80, editable: true },
+    { field: "resource", headerName: "Resource", width: 100, editable: true },
+    { field: "notes", headerName: "Notes", editable: true, flex: 1, width: 150 },
 ];
 
 const gridOptions = {
@@ -266,24 +267,29 @@ function indentSelection() {
         return;
     }
 
+    let indented = false;
     selectedNodes.forEach(node => {
         // Can't indent the very first row
         if (node.rowIndex === 0) {
-            showMessage('Cannot indent the first row', 'warning');
             return;
         }
         const nodeAbove = gridOptions.api.getDisplayedRowAtIndex(node.rowIndex - 1);
-        if (nodeAbove) {
+        if (nodeAbove && nodeAbove.data) {
             node.data.parent_id = nodeAbove.data.id;
+            indented = true;
             console.log(`Indented task "${node.data.name}" under "${nodeAbove.data.name}"`);
         }
     });
     
-    // Force the grid to re-evaluate the tree structure
-    gridOptions.api.refreshCells({ force: true });
-    gridOptions.api.refreshView();
-    saveProject();
-    showMessage('Tasks indented successfully', 'success');
+    if (indented) {
+        // Force the grid to re-evaluate the tree structure
+        gridOptions.api.refreshCells({ force: true });
+        gridOptions.api.refreshView();
+        saveProject();
+        showMessage('Tasks indented successfully', 'success');
+    } else {
+        showMessage('Cannot indent the first row', 'warning');
+    }
 }
 
 function outdentSelection() {
@@ -711,9 +717,14 @@ function importProject(event) {
 
 function updateGantt(tasks) {
     const ganttContainer = document.getElementById('gantt');
-    if (!ganttContainer) return;
+    if (!ganttContainer) {
+        console.error('Gantt container not found!');
+        return;
+    }
     
     ganttContainer.innerHTML = ''; // Clear previous chart
+    console.log('updateGantt called with', tasks ? tasks.length : 0, 'tasks');
+    
     if (!tasks || tasks.length === 0) {
         console.log('No tasks to display in Gantt chart');
         return;
@@ -721,14 +732,22 @@ function updateGantt(tasks) {
 
     // Filter tasks that have valid dates and names
     const ganttTasks = tasks
-        .filter(t => t.name && t.name.trim() !== '' && t.start && t.finish)
+        .filter(t => {
+            const hasName = t.name && t.name.trim() !== '';
+            const hasDates = t.start && t.finish && t.start.trim() !== '' && t.finish.trim() !== '';
+            console.log(`Task "${t.name}": hasName=${hasName}, hasDates=${hasDates}, start="${t.start}", finish="${t.finish}"`);
+            return hasName && hasDates;
+        })
         .map(t => {
             try {
+                const startDate = t.start.split('/').reverse().join('-'); // YYYY-MM-DD
+                const endDate = t.finish.split('/').reverse().join('-');   // YYYY-MM-DD
+                console.log(`Converting task "${t.name}": ${t.start} -> ${startDate}, ${t.finish} -> ${endDate}`);
                 return {
                     id: String(t.id),
                     name: t.name,
-                    start: t.start.split('/').reverse().join('-'), // YYYY-MM-DD
-                    end: t.finish.split('/').reverse().join('-'),   // YYYY-MM-DD
+                    start: startDate,
+                    end: endDate,
                     progress: 0,
                     dependencies: t.predecessors ? String(t.predecessors).split(';').map(p => p.trim()).filter(p => p) : []
                 };
@@ -739,22 +758,31 @@ function updateGantt(tasks) {
         })
         .filter(t => t !== null);
 
-    console.log('Updating Gantt with', ganttTasks.length, 'tasks');
+    console.log('Valid Gantt tasks:', ganttTasks);
 
     if (ganttTasks.length > 0) {
         try {
+            // Check if Gantt library is loaded
+            if (typeof Gantt === 'undefined') {
+                console.error('Gantt library not loaded!');
+                showMessage('Gantt chart library not loaded', 'error');
+                return;
+            }
+            
             gantt = new Gantt("#gantt", ganttTasks, {
                 bar_height: 20,
                 padding: 18,
                 view_mode: 'Day',
                 date_format: 'YYYY-MM-DD'
             });
-            console.log('Gantt chart updated successfully');
+            console.log('Gantt chart created successfully with', ganttTasks.length, 'tasks');
         } catch (e) {
             console.error('Error creating Gantt chart:', e);
+            showMessage('Error creating Gantt chart: ' + e.message, 'error');
         }
     } else {
-        console.log('No valid tasks for Gantt chart');
+        console.log('No valid tasks for Gantt chart - tasks need names and dates');
+        showMessage('Add task names and dates to see Gantt chart', 'info');
     }
 }
 
