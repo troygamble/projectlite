@@ -29,6 +29,7 @@ const gridOptions = {
         },
         editable: true,
         valueSetter: params => { // Magic for adding new rows
+            console.log('valueSetter called:', params.newValue);
             params.data.name = params.newValue;
             const rowIndex = params.node.rowIndex;
             const lastRowIndex = gridOptions.api.getLastDisplayedRow();
@@ -430,10 +431,12 @@ function saveProject() {
     const rowData = [];
     gridOptions.api.forEachNode(node => {
         // Don't save the very last, empty row
-        if (node.data && node.data.name) {
+        if (node.data && node.data.name && node.data.name.trim() !== '') {
             rowData.push(node.data);
         }
     });
+    
+    console.log('Saving project with', rowData.length, 'tasks:', rowData);
     
     // Update status
     updateSaveStatus('Saving...', '#FF9800');
