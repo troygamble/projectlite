@@ -7,7 +7,6 @@ const columnDefs = [
     { 
         field: "name", 
         rowDrag: true,
-        cellRenderer: 'agGroupCellRenderer',
         editable: true,
         width: 200,
         valueSetter: params => { // Magic for adding new rows
@@ -44,26 +43,10 @@ const gridOptions = {
     defaultColDef: { resizable: true },
     rowData: [],
     rowSelection: 'multiple',
-    suppressMoveWhenRowDragging: true,
+    suppressMoveWhenRowDragging: false,
     treeData: true,
-    autoGroupColumnDef: {
-        headerName: 'Tasks',
-        minWidth: 200,
-        cellRenderer: 'agGroupCellRenderer',
-        cellRendererParams: {
-            suppressCount: false,
-            checkbox: false,
-            innerRenderer: (params) => {
-                if (params.value) {
-                    return params.value;
-                }
-                return '';
-            }
-        }
-    },
     getDataPath: data => {
-        // This is complex. We manually build the path based on parent_id
-        // which we will manage ourselves.
+        // Simple tree structure based on parent_id
         const path = [];
         let currentData = data;
         const rowDataMap = gridOptions.api.getRenderedNodes().reduce((map, node) => {
@@ -81,7 +64,7 @@ const gridOptions = {
     onCellValueChanged: saveProject,
     onRowDragEnd: saveProject,
     onCellKeyDown: onCellKeyDown,
-    groupDefaultExpanded: 1, // Start with groups expanded
+    groupDefaultExpanded: 1,
     suppressRowClickSelection: false,
     groupSelectsChildren: true,
     groupSelectsFiltered: true,
@@ -284,7 +267,6 @@ function indentSelection() {
     if (indented) {
         // Force the grid to re-evaluate the tree structure
         gridOptions.api.refreshCells({ force: true });
-        gridOptions.api.refreshView();
         saveProject();
         showMessage('Tasks indented successfully', 'success');
     } else {
@@ -316,7 +298,6 @@ function outdentSelection() {
     
     // Force the grid to re-evaluate the tree structure
     gridOptions.api.refreshCells({ force: true });
-    gridOptions.api.refreshView();
     saveProject();
     showMessage('Tasks outdented successfully', 'success');
 }
