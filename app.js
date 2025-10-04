@@ -228,24 +228,37 @@ function getContextMenuItems(params) {
 
 function indentSelection() {
     const selectedNodes = gridOptions.api.getSelectedNodes();
-    if (selectedNodes.length === 0) return;
+    if (selectedNodes.length === 0) {
+        showMessage('Please select a row first', 'warning');
+        return;
+    }
 
     selectedNodes.forEach(node => {
         // Can't indent the very first row
-        if (node.rowIndex === 0) return;
+        if (node.rowIndex === 0) {
+            showMessage('Cannot indent the first row', 'warning');
+            return;
+        }
         const nodeAbove = gridOptions.api.getDisplayedRowAtIndex(node.rowIndex - 1);
         if (nodeAbove) {
             node.data.parent_id = nodeAbove.data.id;
+            console.log(`Indented task "${node.data.name}" under "${nodeAbove.data.name}"`);
         }
     });
-    // A transaction is needed to force the grid to re-evaluate the tree structure
-    gridOptions.api.applyTransaction({ update: selectedNodes.map(n => n.data) });
+    
+    // Force the grid to re-evaluate the tree structure
+    gridOptions.api.refreshCells({ force: true });
+    gridOptions.api.refreshView();
     saveProject();
+    showMessage('Tasks indented successfully', 'success');
 }
 
 function outdentSelection() {
     const selectedNodes = gridOptions.api.getSelectedNodes();
-    if (selectedNodes.length === 0) return;
+    if (selectedNodes.length === 0) {
+        showMessage('Please select a row first', 'warning');
+        return;
+    }
 
     const allNodesMap = {};
     gridOptions.api.forEachNode(node => allNodesMap[node.data.id] = node);
@@ -255,13 +268,18 @@ function outdentSelection() {
             const parentNode = allNodesMap[node.data.parent_id];
             if (parentNode) {
                 node.data.parent_id = parentNode.data.parent_id || null;
+                console.log(`Outdented task "${node.data.name}"`);
             } else {
                  node.data.parent_id = null;
             }
         }
     });
-    gridOptions.api.applyTransaction({ update: selectedNodes.map(n => n.data) });
+    
+    // Force the grid to re-evaluate the tree structure
+    gridOptions.api.refreshCells({ force: true });
+    gridOptions.api.refreshView();
     saveProject();
+    showMessage('Tasks outdented successfully', 'success');
 }
 
 // --- DATE CALCULATION ENGINE (Ported from Python) ---
@@ -660,27 +678,50 @@ function importProject(event) {
 
 function updateGantt(tasks) {
     const ganttContainer = document.getElementById('gantt');
+    if (!ganttContainer) return;
+    
     ganttContainer.innerHTML = ''; // Clear previous chart
-    if (!tasks || tasks.length === 0) return;
+    if (!tasks || tasks.length === 0) {
+        console.log('No tasks to display in Gantt chart');
+        return;
+    }
 
+    // Filter tasks that have valid dates and names
     const ganttTasks = tasks
-        .filter(t => t.start && t.finish && t.name)
-        .map(t => ({
-            id: String(t.id),
-            name: t.name,
-            start: t.start.split('/').reverse().join('-'), // YYYY-MM-DD
-            end: t.finish.split('/').reverse().join('-'),   // YYYY-MM-DD
-            progress: 0,
-            dependencies: t.predecessors ? String(t.predecessors).split(';').map(p => p.trim()) : []
-        }));
+        .filter(t => t.name && t.name.trim() !== '' && t.start && t.finish)
+        .map(t => {
+            try {
+                return {
+                    id: String(t.id),
+                    name: t.name,
+                    start: t.start.split('/').reverse().join('-'), // YYYY-MM-DD
+                    end: t.finish.split('/').reverse().join('-'),   // YYYY-MM-DD
+                    progress: 0,
+                    dependencies: t.predecessors ? String(t.predecessors).split(';').map(p => p.trim()).filter(p => p) : []
+                };
+            } catch (e) {
+                console.warn('Error processing task for Gantt:', t, e);
+                return null;
+            }
+        })
+        .filter(t => t !== null);
+
+    console.log('Updating Gantt with', ganttTasks.length, 'tasks');
 
     if (ganttTasks.length > 0) {
-        gantt = new Gantt("#gantt", ganttTasks, {
-            bar_height: 20,
-            padding: 18,
-            view_mode: 'Day',
-            date_format: 'YYYY-MM-DD'
-        });
+        try {
+            gantt = new Gantt("#gantt", ganttTasks, {
+                bar_height: 20,
+                padding: 18,
+                view_mode: 'Day',
+                date_format: 'YYYY-MM-DD'
+            });
+            console.log('Gantt chart updated successfully');
+        } catch (e) {
+            console.error('Error creating Gantt chart:', e);
+        }
+    } else {
+        console.log('No valid tasks for Gantt chart');
     }
 }
 
