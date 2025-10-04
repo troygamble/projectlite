@@ -45,6 +45,21 @@ const gridOptions = {
     rowSelection: 'multiple',
     suppressMoveWhenRowDragging: true,
     treeData: true,
+    autoGroupColumnDef: {
+        headerName: 'Tasks',
+        minWidth: 200,
+        cellRenderer: 'agGroupCellRenderer',
+        cellRendererParams: {
+            suppressCount: false,
+            checkbox: false,
+            innerRenderer: (params) => {
+                if (params.value) {
+                    return params.value;
+                }
+                return '';
+            }
+        }
+    },
     getDataPath: data => {
         // This is complex. We manually build the path based on parent_id
         // which we will manage ourselves.
@@ -65,6 +80,10 @@ const gridOptions = {
     onCellValueChanged: saveProject,
     onRowDragEnd: saveProject,
     onCellKeyDown: onCellKeyDown,
+    groupDefaultExpanded: 1, // Start with groups expanded
+    suppressRowClickSelection: false,
+    groupSelectsChildren: true,
+    groupSelectsFiltered: true,
 };
 
 // --- CORE FUNCTIONS ---
@@ -179,6 +198,20 @@ function insertRowBelow() {
     
     saveProject();
     showMessage('Row inserted below', 'success');
+}
+
+function expandAll() {
+    if (gridOptions.api) {
+        gridOptions.api.expandAll();
+        showMessage('All summary tasks expanded', 'success');
+    }
+}
+
+function collapseAll() {
+    if (gridOptions.api) {
+        gridOptions.api.collapseAll();
+        showMessage('All summary tasks collapsed', 'success');
+    }
 }
 
 function getNextId() {
