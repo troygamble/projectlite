@@ -64,9 +64,122 @@ const gridOptions = {
     getContextMenuItems: getContextMenuItems,
     onCellValueChanged: saveProject,
     onRowDragEnd: saveProject,
+    onCellKeyDown: onCellKeyDown,
 };
 
 // --- CORE FUNCTIONS ---
+
+function onCellKeyDown(event) {
+    // Handle Enter key to create new row below (like Excel)
+    if (event.event.key === 'Enter') {
+        event.event.preventDefault();
+        const currentRowIndex = event.node.rowIndex;
+        const newId = getNextId();
+        const newRow = { 
+            id: newId, 
+            name: '', 
+            duration: 1, 
+            start: '', 
+            finish: '', 
+            predecessors: '', 
+            resource: '', 
+            notes: '' 
+        };
+        
+        // Insert new row below current row
+        gridOptions.api.applyTransaction({ 
+            add: [newRow], 
+            addIndex: currentRowIndex + 1 
+        });
+        
+        // Move focus to the new row
+        setTimeout(() => {
+            gridOptions.api.setFocusedCell(currentRowIndex + 1, 'name');
+            gridOptions.api.startEditingCell({
+                rowIndex: currentRowIndex + 1,
+                colKey: 'name'
+            });
+        }, 50);
+        
+        saveProject();
+    }
+}
+
+function insertRowAbove() {
+    const selectedNodes = gridOptions.api.getSelectedNodes();
+    if (selectedNodes.length === 0) {
+        showMessage('Please select a row first', 'warning');
+        return;
+    }
+    
+    const rowIndex = selectedNodes[0].rowIndex;
+    const newId = getNextId();
+    const newRow = { 
+        id: newId, 
+        name: '', 
+        duration: 1, 
+        start: '', 
+        finish: '', 
+        predecessors: '', 
+        resource: '', 
+        notes: '' 
+    };
+    
+    gridOptions.api.applyTransaction({ 
+        add: [newRow], 
+        addIndex: rowIndex 
+    });
+    
+    // Move focus to the new row
+    setTimeout(() => {
+        gridOptions.api.setFocusedCell(rowIndex, 'name');
+        gridOptions.api.startEditingCell({
+            rowIndex: rowIndex,
+            colKey: 'name'
+        });
+    }, 50);
+    
+    saveProject();
+    showMessage('Row inserted above', 'success');
+}
+
+function insertRowBelow() {
+    const selectedNodes = gridOptions.api.getSelectedNodes();
+    if (selectedNodes.length === 0) {
+        showMessage('Please select a row first', 'warning');
+        return;
+    }
+    
+    const rowIndex = selectedNodes[0].rowIndex;
+    const newId = getNextId();
+    const newRow = { 
+        id: newId, 
+        name: '', 
+        duration: 1, 
+        start: '', 
+        finish: '', 
+        predecessors: '', 
+        resource: '', 
+        notes: '' 
+    };
+    
+    gridOptions.api.applyTransaction({ 
+        add: [newRow], 
+        addIndex: rowIndex + 1 
+    });
+    
+    // Move focus to the new row
+    setTimeout(() => {
+        gridOptions.api.setFocusedCell(rowIndex + 1, 'name');
+        gridOptions.api.startEditingCell({
+            rowIndex: rowIndex + 1,
+            colKey: 'name'
+        });
+    }, 50);
+    
+    saveProject();
+    showMessage('Row inserted below', 'success');
+}
 
 function getNextId() {
     let maxId = 0;
@@ -353,7 +466,7 @@ function loadProject() {
         }
     }
     
-    // Always ensure there's at least one empty row to start typing
+    // Always ensure there are plenty of empty rows ready to go (like Excel)
     if (rowData.length === 0) {
         // Add a sample task to help users understand how to use it
         rowData.push({ 
@@ -366,29 +479,39 @@ function loadProject() {
             resource: 'Team Member', 
             notes: 'This is a sample task. Click on any cell to edit it!' 
         });
-        // Add an empty row for new tasks
-        rowData.push({ 
-            id: 2, 
-            name: '', 
-            duration: 1, 
-            start: '', 
-            finish: '', 
-            predecessors: '', 
-            resource: '', 
-            notes: '' 
-        });
-    } else if (rowData[rowData.length-1].name !== '') {
-        // Add a new empty row if the last row has content
-        rowData.push({ 
-            id: getNextId(), 
-            name: '', 
-            duration: 1, 
-            start: '', 
-            finish: '', 
-            predecessors: '', 
-            resource: '', 
-            notes: '' 
-        });
+        // Add 20 empty rows ready to go (like Excel)
+        for (let i = 2; i <= 21; i++) {
+            rowData.push({ 
+                id: i, 
+                name: '', 
+                duration: 1, 
+                start: '', 
+                finish: '', 
+                predecessors: '', 
+                resource: '', 
+                notes: '' 
+            });
+        }
+    } else {
+        // Always ensure there are at least 10 empty rows at the end
+        const emptyRowsNeeded = 10;
+        const currentEmptyRows = rowData.filter(row => !row.name || row.name.trim() === '').length;
+        
+        if (currentEmptyRows < emptyRowsNeeded) {
+            const rowsToAdd = emptyRowsNeeded - currentEmptyRows;
+            for (let i = 0; i < rowsToAdd; i++) {
+                rowData.push({ 
+                    id: getNextId(), 
+                    name: '', 
+                    duration: 1, 
+                    start: '', 
+                    finish: '', 
+                    predecessors: '', 
+                    resource: '', 
+                    notes: '' 
+                });
+            }
+        }
     }
     
     console.log('Loading project with', rowData.length, 'rows');
