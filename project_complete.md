@@ -194,6 +194,7 @@ const gridOptions = {
         },
         editable: true,
         valueSetter: params => { // Magic for adding new rows
+            console.log('valueSetter called:', params.newValue);
             params.data.name = params.newValue;
             const rowIndex = params.node.rowIndex;
             const lastRowIndex = gridOptions.api.getLastDisplayedRow();
@@ -595,10 +596,12 @@ function saveProject() {
     const rowData = [];
     gridOptions.api.forEachNode(node => {
         // Don't save the very last, empty row
-        if (node.data && node.data.name) {
+        if (node.data && node.data.name && node.data.name.trim() !== '') {
             rowData.push(node.data);
         }
     });
+    
+    console.log('Saving project with', rowData.length, 'tasks:', rowData);
     
     // Update status
     updateSaveStatus('Saving...', '#FF9800');
@@ -729,10 +732,13 @@ function loadProject() {
 function exportProject() {
     const rowData = [];
     gridOptions.api.forEachNode(node => {
-        if (node.data && node.data.name) {
+        // Don't save the very last, empty row
+        if (node.data && node.data.name && node.data.name.trim() !== '') {
              rowData.push(node.data);
         }
     });
+    
+    console.log('Exporting project with', rowData.length, 'tasks:', rowData);
     
     // Add metadata
     const exportData = {
@@ -750,14 +756,15 @@ function exportProject() {
     URL.revokeObjectURL(a.href);
     
     // Show success message
-    showMessage('Project exported successfully!', 'success');
+    showMessage(`Project exported successfully! (${rowData.length} tasks)`, 'success');
 }
 
 function autoExport() {
     // Auto-export every 5 minutes if there are changes
     const rowData = [];
     gridOptions.api.forEachNode(node => {
-        if (node.data && node.data.name) {
+        // Don't save the very last, empty row
+        if (node.data && node.data.name && node.data.name.trim() !== '') {
              rowData.push(node.data);
         }
     });
@@ -845,12 +852,24 @@ function importProject(event) {
             }
             
             if (tasks.length > 0) {
+                // Add empty rows for data entry (like loadProject does)
+                const emptyRowsNeeded = 10;
+                for (let i = 0; i < emptyRowsNeeded; i++) {
+                    tasks.push({ 
+                        id: getNextId() + i, 
+                        name: '', 
+                        duration: 1, 
+                        start: '', 
+                        finish: '', 
+                        predecessors: '', 
+                        resource: '', 
+                        notes: '' 
+                    });
+                }
+                
                 gridOptions.api.setRowData(tasks);
-                // Add the final empty row back for data entry
-                const newId = getNextId();
-                gridOptions.api.applyTransaction({ add: [{ id: newId, name: '' }] });
                 saveProject();
-                showMessage(`Imported ${tasks.length} tasks successfully!`, 'success');
+                showMessage(`Imported ${tasks.length - emptyRowsNeeded} tasks successfully!`, 'success');
             } else {
                 showMessage('No tasks found in the imported file.', 'warning');
             }

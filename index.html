@@ -4,23 +4,8 @@
     <meta charset="UTF-8">
     <title>Fluid Project Tracker</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
-    <!-- AG Grid -->
-    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.0.0/dist/ag-grid-community.min.js"></script>
-    <script>
-        // Fallback for AG Grid if CDN fails
-        if (typeof agGrid === 'undefined') {
-            console.log('Loading AG Grid fallback...');
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/ag-grid-community@31.0.0/dist/ag-grid-community.min.js';
-            script.onload = function() {
-                console.log('AG Grid fallback loaded');
-            };
-            script.onerror = function() {
-                console.error('AG Grid fallback also failed');
-            };
-            document.head.appendChild(script);
-        }
-    </script>
+    <!-- AG Grid Community Edition -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31.1.1/dist/ag-grid-community.min.js"></script>
     <!-- Frappe Gantt -->
     <script src="frappe-gantt.min.js"></script>
     <link rel="stylesheet" href="frappe-gantt.css" />
@@ -33,23 +18,24 @@
             <button onclick="recalculateProject()">Recalculate</button>
             <button onclick="indentSelection()">Indent (Alt+Right)</button>
             <button onclick="outdentSelection()">Outdent (Alt+Left)</button>
-            <button onclick="insertRowAbove()" style="background-color: #2196F3; color: white;">Insert Row Above</button>
-            <button onclick="insertRowBelow()" style="background-color: #2196F3; color: white;">Insert Row Below</button>
-            <button onclick="expandAll()" style="background-color: #FF9800; color: white;">Expand All</button>
-            <button onclick="collapseAll()" style="background-color: #FF9800; color: white;">Collapse All</button>
-            <button onclick="exportProject()">Export to File</button>
-            <button onclick="downloadAutoExport()" style="background-color: #4CAF50; color: white;">Download Auto-Export</button>
+            <button onclick="insertRowAbove()">Insert Above</button>
+            <button onclick="deleteSelectedRows()">Delete Selected</button>
+            <button onclick="expandAll()">Expand All</button>
+            <button onclick="collapseAll()">Collapse All</button>
+            <div class="separator"></div>
+            <button onclick="exportProject()">Export</button>
             <label class="file-input-label">
-                Import from File
+                Import
                 <input type="file" id="import-file" onchange="importProject(event)" accept=".json">
             </label>
-            <div id="status-indicator" style="margin-left: 10px; font-size: 12px; color: #666;">
+            <div id="status-indicator">
                 <span id="save-status">Ready</span>
             </div>
         </div>
 
-        <div class="main-content">
-            <div id="myGrid" class="ag-theme-alpine"></div>
+        <div class="content-wrapper">
+            <!-- AG Grid will be created inside this wrapper -->
+            <div id="grid-wrapper" class="ag-theme-alpine"></div>
             <div class="gantt-container">
                 <svg id="gantt"></svg>
             </div>

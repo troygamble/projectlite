@@ -1,392 +1,282 @@
 // --- GLOBALS & CONFIG ---
+let gridApi;
 let gantt;
-const LOCAL_STORAGE_KEY = 'myProjectData';
+const LOCAL_STORAGE_KEY = 'fluidProjectData_v2'; // New key for new data structure
 
-// --- AG GRID SETUP ---
+// --- ARCHITECTURAL REFACTOR: Emulate Tree Data with Row Grouping ---
+// This is the core change. We no longer use the (Enterprise-only) `treeData`.
+// Instead, we manually manage a parent-child relationship using `parent_id`
+// and tell the free Community version of AG Grid to group rows based on this.
 const columnDefs = [
-    { field: "duration", headerName: "Dur", width: 60, editable: true, valueParser: p => parseInt(p.newValue) || 0 },
-    { field: "start", headerName: "Start", width: 80, editable: true },
-    { field: "finish", headerName: "Finish", width: 80, editable: false },
+    // This is now a regular column, not part of a tree structure
+    { 
+        field: "name", 
+        headerName: 'Task Name',
+        editable: true,
+        flex: 2, // Give it more space
+        // Add the "new row" magic here
+        valueSetter: params => {
+            params.data.name = params.newValue;
+            const allNodes = getAllNodes();
+            // If we are editing the last row and it's not empty, add a new one
+            if (params.node.rowIndex === allNodes.length - 1 && params.newValue?.trim()) {
+                addNewRow(allNodes.length);
+            }
+            return true;
+        }
+    },
+    { field: "duration", headerName: "Dur", width: 60, editable: true, valueParser: p => parseInt(p.newValue, 10) || 0 },
+    { field: "start", headerName: "Start", width: 100, editable: true },
+    { field: "finish", headerName: "Finish", width: 100, editable: false },
     { field: "predecessors", headerName: "Pred", width: 80, editable: true },
-    { field: "resource", headerName: "Resource", width: 100, editable: true },
-    { field: "notes", headerName: "Notes", editable: true, flex: 1, width: 150 },
+    { field: "resource", headerName: "Resource", width: 120, editable: true },
 ];
 
 const gridOptions = {
     columnDefs: columnDefs,
     defaultColDef: { resizable: true },
-    rowData: [],
+    rowDragManaged: true, // Let the grid handle row dragging visually
     rowSelection: 'multiple',
-    suppressMoveWhenRowDragging: false,
-    treeData: true,
+    suppressMoveWhenRowDragging: true,
+    
+    // --- The NEW Hierarchy Engine ---
+    groupDefaultExpanded: -1, // Expand all groups by default
     autoGroupColumnDef: {
-        headerName: 'Tasks',
+        headerName: 'Task Hierarchy',
         minWidth: 250,
-        cellRenderer: 'agGroupCellRenderer',
+        flex: 1,
         cellRendererParams: {
-            suppressCount: false,
-            checkbox: false
+            suppressCount: true, // Don't show "(5)" count next to summary tasks
+            checkbox: true, // Enable selection checkboxes
         },
-        editable: true,
-        valueSetter: params => { // Magic for adding new rows
-            console.log('valueSetter called:', params.newValue);
-            params.data.name = params.newValue;
-            const rowIndex = params.node.rowIndex;
-            const lastRowIndex = gridOptions.api.getLastDisplayedRow();
-            if (rowIndex === lastRowIndex && params.newValue && params.newValue.trim() !== '') {
-                const newId = getNextId();
-                const newRow = { 
-                    id: newId, 
-                    name: '', 
-                    duration: 1, 
-                    start: '', 
-                    finish: '', 
-                    predecessors: '', 
-                    resource: '', 
-                    notes: '' 
-                };
-                gridOptions.api.applyTransaction({ add: [newRow] });
-            }
-            return true;
-        }
+        rowDrag: true, // Allow dragging from the group column
     },
+    // This function tells the grid how to build the hierarchy path for each task
     getDataPath: data => {
-        // Simple tree structure based on parent_id
         const path = [];
-        let currentData = data;
-        const rowDataMap = gridOptions.api.getRenderedNodes().reduce((map, node) => {
-            map[node.data.id] = node.data;
-            return map;
-        }, {});
-        
-        while(currentData) {
-            path.unshift(currentData.name || `Task ${currentData.id}`);
-            currentData = currentData.parent_id ? rowDataMap[currentData.parent_id] : null;
+        let current = data;
+        const tasksById = buildTaskMap(getAllNodes().map(n => n.data));
+        while (current && current.parent_id != null) {
+            const parent = tasksById[current.parent_id];
+            if (parent) {
+                path.unshift(parent.name);
+                current = parent;
+            } else {
+                current = null; // Break if parent not found
+            }
         }
         return path;
     },
-    getContextMenuItems: getContextMenuItems,
-    onCellValueChanged: saveProject,
-    onRowDragEnd: saveProject,
+    
+    onCellValueChanged: () => saveAndRefresh(),
+    onRowDragEnd: onRowDragEnd,
     onCellKeyDown: onCellKeyDown,
-    groupDefaultExpanded: 1,
-    suppressRowClickSelection: false,
-    groupSelectsChildren: true,
-    groupSelectsFiltered: true,
 };
 
-// --- CORE FUNCTIONS ---
+// --- UTILITY FUNCTIONS ---
+const getAllNodes = () => {
+    const rowData = [];
+    if (gridApi) gridApi.forEachNode(node => rowData.push(node));
+    return rowData;
+};
 
-function onCellKeyDown(event) {
-    // Handle Enter key to create new row below (like Excel)
-    if (event.event.key === 'Enter') {
-        event.event.preventDefault();
-        const currentRowIndex = event.node.rowIndex;
-        const newId = getNextId();
-        const newRow = { 
-            id: newId, 
-            name: '', 
-            duration: 1, 
-            start: '', 
-            finish: '', 
-            predecessors: '', 
-            resource: '', 
-            notes: '' 
-        };
-        
-        // Insert new row below current row
-        gridOptions.api.applyTransaction({ 
-            add: [newRow], 
-            addIndex: currentRowIndex + 1 
-        });
-        
-        // Move focus to the new row
-        setTimeout(() => {
-            gridOptions.api.setFocusedCell(currentRowIndex + 1, 'ag-Grid-AutoColumn');
-            gridOptions.api.startEditingCell({
-                rowIndex: currentRowIndex + 1,
-                colKey: 'ag-Grid-AutoColumn'
-            });
-        }, 50);
-        
-        saveProject();
+const buildTaskMap = (tasks) => tasks.reduce((acc, task) => {
+    acc[task.id] = task;
+    return acc;
+}, {});
+
+const getNextId = () => {
+    const nodes = getAllNodes();
+    if (nodes.length === 0) return 1;
+    return Math.max(...nodes.map(n => n.data.id)) + 1;
+}
+
+const showMessage = (text, type = 'info') => {
+    console.log(`[${type.toUpperCase()}] ${text}`);
+    const statusEl = document.getElementById('save-status');
+    if (!statusEl) return;
+    const colors = { success: '#198754', warning: '#ffc107', error: '#dc3545', info: '#0d6efd' };
+    statusEl.textContent = text;
+    statusEl.style.color = colors[type] || '#6c757d';
+    if (type !== 'info') setTimeout(() => { statusEl.textContent = 'Ready'; statusEl.style.color = '#6c757d'; }, 3000);
+}
+
+// --- CORE HIERARCHY & CRUD LOGIC ---
+
+function onRowDragEnd(event) {
+    const movingNode = event.node;
+    const overNode = event.overNode;
+    
+    if (!overNode || movingNode.id === overNode.id) return; // Dropped in same spot or empty space
+
+    const allTasks = getAllNodes().map(n => n.data);
+    const movingTask = movingNode.data;
+
+    // Logic: Find the node *above* the drop target to determine the new parent
+    // and insertion index.
+    const dropIndex = overNode.rowIndex;
+    const nodeAbove = gridApi.getDisplayedRowAtIndex(dropIndex - 1);
+
+    // Case 1: Dropped at the very top
+    if (!nodeAbove) {
+        movingTask.parent_id = null;
+    } 
+    // Case 2: Dropped somewhere in the middle
+    else {
+        // If the node above is open, we become its child. Otherwise, we become its sibling.
+        const nodeAboveIsParent = nodeAbove.isGroup() && nodeAbove.expanded;
+        movingTask.parent_id = nodeAboveIsParent ? nodeAbove.data.id : nodeAbove.data.parent_id;
     }
+
+    // Reorder the tasks array
+    const movingTaskIndex = allTasks.findIndex(t => t.id === movingTask.id);
+    allTasks.splice(movingTaskIndex, 1);
+    
+    // Find new index
+    let newIndex = allTasks.findIndex(t => t.id === overNode.data.id);
+    if(event.vDirection === 'bottom') newIndex++;
+    
+    allTasks.splice(newIndex, 0, movingTask);
+    
+    gridApi.setGridOption('rowData', allTasks);
+    saveAndRefresh();
+    showMessage('Tasks reordered', 'success');
+}
+
+
+function onCellKeyDown(params) {
+    if (params.event.key === 'Enter') {
+        params.event.preventDefault();
+        insertRowBelow();
+    }
+}
+
+function addNewRow(index, parentId = null) {
+    const newId = getNextId();
+    const newRow = { id: newId, name: '', duration: 1, parent_id: parentId };
+    gridApi.applyTransaction({ add: [newRow], addIndex: index });
+    return { newId, index };
 }
 
 function insertRowAbove() {
-    const selectedNodes = gridOptions.api.getSelectedNodes();
+    const selectedNodes = gridApi.getSelectedNodes();
     if (selectedNodes.length === 0) {
-        showMessage('Please select a row first', 'warning');
+        addNewRow(getAllNodes().length);
+        showMessage('Added new row at the end', 'info');
         return;
     }
-    
-    const rowIndex = selectedNodes[0].rowIndex;
-    const newId = getNextId();
-    const newRow = { 
-        id: newId, 
-        name: '', 
-        duration: 1, 
-        start: '', 
-        finish: '', 
-        predecessors: '', 
-        resource: '', 
-        notes: '' 
-    };
-    
-    gridOptions.api.applyTransaction({ 
-        add: [newRow], 
-        addIndex: rowIndex 
-    });
-    
-    // Move focus to the new row
+    const node = selectedNodes[0];
+    const { index } = addNewRow(node.rowIndex, node.data.parent_id);
     setTimeout(() => {
-        gridOptions.api.setFocusedCell(rowIndex, 'ag-Grid-AutoColumn');
-        gridOptions.api.startEditingCell({
-            rowIndex: rowIndex,
-            colKey: 'ag-Grid-AutoColumn'
-        });
+        gridApi.setFocusedCell(index, 'name');
+        gridApi.startEditingCell({ rowIndex: index, colKey: 'name' });
     }, 50);
-    
-    saveProject();
-    showMessage('Row inserted above', 'success');
 }
 
 function insertRowBelow() {
-    const selectedNodes = gridOptions.api.getSelectedNodes();
+    const selectedNodes = gridApi.getSelectedNodes();
     if (selectedNodes.length === 0) {
-        showMessage('Please select a row first', 'warning');
+        insertRowAbove();
         return;
     }
-    
-    const rowIndex = selectedNodes[0].rowIndex;
-    const newId = getNextId();
-    const newRow = { 
-        id: newId, 
-        name: '', 
-        duration: 1, 
-        start: '', 
-        finish: '', 
-        predecessors: '', 
-        resource: '', 
-        notes: '' 
-    };
-    
-    gridOptions.api.applyTransaction({ 
-        add: [newRow], 
-        addIndex: rowIndex + 1 
-    });
-    
-    // Move focus to the new row
-    setTimeout(() => {
-        gridOptions.api.setFocusedCell(rowIndex + 1, 'ag-Grid-AutoColumn');
-        gridOptions.api.startEditingCell({
-            rowIndex: rowIndex + 1,
-            colKey: 'ag-Grid-AutoColumn'
-        });
+    const node = selectedNodes[0];
+    const { index } = addNewRow(node.rowIndex + 1, node.data.parent_id);
+     setTimeout(() => {
+        gridApi.setFocusedCell(index, 'name');
+        gridApi.startEditingCell({ rowIndex: index, colKey: 'name' });
     }, 50);
-    
-    saveProject();
-    showMessage('Row inserted below', 'success');
 }
 
-function expandAll() {
-    if (gridOptions.api) {
-        gridOptions.api.expandAll();
-        showMessage('All summary tasks expanded', 'success');
+function deleteSelectedRows() {
+    const selectedRows = gridApi.getSelectedRows();
+    if(selectedRows.length === 0) {
+        showMessage('No rows selected to delete', 'warning');
+        return;
     }
+    gridApi.applyTransaction({ remove: selectedRows });
+    saveAndRefresh();
+    showMessage(`${selectedRows.length} row(s) deleted`, 'success');
 }
 
-function collapseAll() {
-    if (gridOptions.api) {
-        gridOptions.api.collapseAll();
-        showMessage('All summary tasks collapsed', 'success');
-    }
-}
-
-function getNextId() {
-    let maxId = 0;
-    if (gridOptions.api) {
-        gridOptions.api.forEachNode(node => {
-            if (node.data && node.data.id > maxId) {
-                maxId = node.data.id;
-            }
-        });
-    }
-    return maxId + 1;
-}
-
-function getContextMenuItems(params) {
-    const result = [
-        {
-            name: 'Insert Row Above',
-            action: () => {
-                const newId = getNextId();
-                const newRow = { id: newId, name: 'New Task' };
-                gridOptions.api.applyTransaction({ add: [newRow], addIndex: params.node.rowIndex });
-            }
-        },
-        {
-            name: 'Insert Row Below',
-            action: () => {
-                const newId = getNextId();
-                const newRow = { id: newId, name: 'New Task' };
-                gridOptions.api.applyTransaction({ add: [newRow], addIndex: params.node.rowIndex + 1 });
-            }
-        },
-        'separator',
-        {
-            name: 'Delete Selected Row(s)',
-            action: () => {
-                const selectedRows = gridOptions.api.getSelectedRows();
-                gridOptions.api.applyTransaction({ remove: selectedRows });
-            }
-        },
-        'separator',
-        'copy',
-        'paste',
-    ];
-    return result;
-}
 
 function indentSelection() {
-    const selectedNodes = gridOptions.api.getSelectedNodes();
-    if (selectedNodes.length === 0) {
-        showMessage('Please select a row first', 'warning');
-        return;
-    }
+    const selectedNodes = gridApi.getSelectedNodes();
+    if (selectedNodes.length === 0) return showMessage('Select a row to indent', 'warning');
 
-    let indented = false;
     selectedNodes.forEach(node => {
-        // Can't indent the very first row
-        if (node.rowIndex === 0) {
-            return;
-        }
-        const nodeAbove = gridOptions.api.getDisplayedRowAtIndex(node.rowIndex - 1);
-        if (nodeAbove && nodeAbove.data) {
+        if (node.rowIndex === 0) return;
+        const nodeAbove = gridApi.getDisplayedRowAtIndex(node.rowIndex - 1);
+        if (nodeAbove) {
             node.data.parent_id = nodeAbove.data.id;
-            indented = true;
-            console.log(`Indented task "${node.data.name}" under "${nodeAbove.data.name}"`);
         }
     });
-    
-    if (indented) {
-        // Force the grid to re-evaluate the tree structure
-        gridOptions.api.refreshCells({ force: true });
-        saveProject();
-        showMessage('Tasks indented successfully', 'success');
-    } else {
-        showMessage('Cannot indent the first row', 'warning');
-    }
+
+    // An update transaction forces the grid to re-evaluate the data path for grouping
+    gridApi.applyTransaction({ update: selectedNodes.map(n => n.data) });
+    saveAndRefresh();
 }
 
 function outdentSelection() {
-    const selectedNodes = gridOptions.api.getSelectedNodes();
-    if (selectedNodes.length === 0) {
-        showMessage('Please select a row first', 'warning');
-        return;
-    }
+    const selectedNodes = gridApi.getSelectedNodes();
+    if (selectedNodes.length === 0) return showMessage('Select a row to outdent', 'warning');
 
-    const allNodesMap = {};
-    gridOptions.api.forEachNode(node => allNodesMap[node.data.id] = node);
+    const allTasks = getAllNodes().map(n => n.data);
+    const tasksById = buildTaskMap(allTasks);
 
     selectedNodes.forEach(node => {
-        if (node.data.parent_id) {
-            const parentNode = allNodesMap[node.data.parent_id];
-            if (parentNode) {
-                node.data.parent_id = parentNode.data.parent_id || null;
-                console.log(`Outdented task "${node.data.name}"`);
-            } else {
-                 node.data.parent_id = null;
-            }
+        if (node.data.parent_id != null) {
+            const parent = tasksById[node.data.parent_id];
+            node.data.parent_id = parent ? parent.parent_id : null;
         }
     });
     
-    // Force the grid to re-evaluate the tree structure
-    gridOptions.api.refreshCells({ force: true });
-    saveProject();
-    showMessage('Tasks outdented successfully', 'success');
+    gridApi.applyTransaction({ update: selectedNodes.map(n => n.data) });
+    saveAndRefresh();
 }
 
-// --- DATE CALCULATION ENGINE (Ported from Python) ---
-function parseDate(dateStr) { // Expects DD/MM/YYYY
-    if (!dateStr || typeof dateStr !== 'string') return null;
-    const parts = dateStr.split('/');
-    if (parts.length !== 3) return null;
-    return new Date(parts[2], parts[1] - 1, parts[0]);
-}
+function expandAll() { gridApi.expandAll(); }
+function collapseAll() { gridApi.collapseAll(); }
 
-function formatDate(dateObj) { // Returns DD/MM/YYYY
-    if (!dateObj) return '';
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const year = dateObj.getFullYear();
-    return `${day}/${month}/${year}`;
-}
+// --- DATE CALCULATION ENGINE (Robust Version) ---
 
-function addWorkdays(startDate, days) {
-    if (!startDate) return null;
-    let date = new Date(startDate.getTime());
-    let added = 0;
-    while (added < days) {
-        date.setDate(date.getDate() + 1);
-        const dayOfWeek = date.getDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday or Saturday
-            added++;
-        }
-    }
-    return date;
-}
+// ... (parseDate, formatDate, addWorkdays functions are the same as your version, they are solid)
+function parseDate(dateStr) { if (!dateStr || typeof dateStr !== 'string') return null; const parts = dateStr.split('/'); if (parts.length !== 3) return null; return new Date(parts[2], parts[1] - 1, parts[0]); }
+function formatDate(dateObj) { if (!dateObj) return ''; const day = String(dateObj.getDate()).padStart(2, '0'); const month = String(dateObj.getMonth() + 1).padStart(2, '0'); const year = dateObj.getFullYear(); return `${day}/${month}/${year}`; }
+function addWorkdays(startDate, days) { if (!startDate) return null; let date = new Date(startDate.getTime()); let added = 0; while (added < days) { date.setDate(date.getDate() + 1); const dayOfWeek = date.getDay(); if (dayOfWeek !== 0 && dayOfWeek !== 6) added++; } return date; }
 
 function recalculateProject() {
-    console.log("Recalculating project...");
-    let tasks = [];
-    gridOptions.api.forEachNode(node => {
-        // Exclude the last empty row for adding new tasks
-        if (node.data && node.data.name) {
-            tasks.push({...node.data});
-        }
-    });
+    showMessage('Recalculating...', 'info');
+    let tasks = getAllNodes().map(n => ({...n.data})).filter(t => t.name?.trim());
+    const tasksById = buildTaskMap(tasks);
 
-    const tasksById = tasks.reduce((acc, task) => {
-        acc[task.id] = task;
-        return acc;
-    }, {});
+    // Identify summary tasks
+    tasks.forEach(task => task.is_summary = tasks.some(t => t.parent_id === task.id));
 
-    // Pass 1: Schedule individual tasks
+    // Pass 1: Schedule individual tasks based on dependencies
     tasks.forEach(task => {
-        // Identify summary tasks by checking if they are a parent to anyone
-        task.is_summary = tasks.some(t => t.parent_id === task.id);
         if (task.is_summary) return;
 
         let startDate = parseDate(task.start);
-        
-        // Check predecessors
         if (task.predecessors) {
             let latestPredecessorFinish = null;
             const predIds = String(task.predecessors).split(';').map(p => parseInt(p.trim())).filter(id => !isNaN(id));
             
             predIds.forEach(pId => {
                 const predTask = tasksById[pId];
-                if (predTask) {
+                if (predTask && predTask.finish) {
                     const predFinishDate = parseDate(predTask.finish);
                     if (predFinishDate && (!latestPredecessorFinish || predFinishDate > latestPredecessorFinish)) {
                         latestPredecessorFinish = predFinishDate;
                     }
                 }
             });
-
-            if (latestPredecessorFinish) {
-                startDate = addWorkdays(latestPredecessorFinish, 1);
-            }
+            if (latestPredecessorFinish) startDate = addWorkdays(latestPredecessorFinish, 1);
         }
         
-        if (!startDate) {
-            startDate = new Date(); // Default to today
-        }
+        if (!startDate) startDate = new Date();
         
         const duration = task.duration ? parseInt(task.duration) : 1;
         const finishDate = addWorkdays(startDate, duration > 0 ? duration - 1 : 0);
-
         task.start = formatDate(startDate);
         task.finish = formatDate(finishDate);
     });
@@ -397,274 +287,78 @@ function recalculateProject() {
         if (task.is_summary) {
             const children = tasks.filter(t => t.parent_id === task.id);
             if (children.length > 0) {
-                let minStart = null;
-                let maxFinish = null;
+                let minStart = null, maxFinish = null;
                 children.forEach(child => {
-                    const childStart = parseDate(child.start);
-                    const childFinish = parseDate(child.finish);
-                    if (childStart && (!minStart || childStart < minStart)) {
-                        minStart = childStart;
-                    }
-                    if (childFinish && (!maxFinish || childFinish > maxFinish)) {
-                        maxFinish = childFinish;
-                    }
+                    const childStart = parseDate(child.start), childFinish = parseDate(child.finish);
+                    if (childStart && (!minStart || childStart < minStart)) minStart = childStart;
+                    if (childFinish && (!maxFinish || childFinish > maxFinish)) maxFinish = childFinish;
                 });
                 task.start = formatDate(minStart);
                 task.finish = formatDate(maxFinish);
-                task.duration = 0;
+                task.duration = 0; // Summary tasks have calculated duration
             }
         }
     }
-
-    gridOptions.api.setRowData(tasks);
-    // Add the final empty row back for data entry
-    const newId = getNextId();
-    gridOptions.api.applyTransaction({ add: [{ id: newId, name: '' }] });
-    updateGantt(tasks);
-    saveProject();
-    console.log("Recalculation complete.");
+    
+    // Refresh grid with calculated data
+    gridApi.setGridOption('rowData', tasks);
+    addNewRow(tasks.length); // Add empty row at the end
+    saveAndRefresh();
+    showMessage('Project recalculated!', 'success');
 }
+
 
 // --- DATA PERSISTENCE ---
 
-function saveProject() {
-    const rowData = [];
-    gridOptions.api.forEachNode(node => {
-        // Don't save the very last, empty row
-        if (node.data && node.data.name && node.data.name.trim() !== '') {
-            rowData.push(node.data);
-        }
-    });
+function saveAndRefresh() {
+    const rowData = getAllNodes()
+        .map(node => node.data)
+        .filter(task => task.name?.trim() || task.id != null); // Keep empty row if it has an id
     
-    console.log('Saving project with', rowData.length, 'tasks:', rowData);
-    
-    // Update status
-    updateSaveStatus('Saving...', '#FF9800');
-    
-    // Save to localStorage
     try {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(rowData));
-        console.log('Project saved to localStorage');
-        updateSaveStatus('Saved', '#4CAF50');
-        
-        // Also trigger auto-export
-        autoExport();
+        updateGantt(rowData);
     } catch (e) {
-        console.warn('Could not save to localStorage:', e);
-        updateSaveStatus('Save Failed', '#f44336');
-        // Fallback: show save reminder
-        showSaveReminder();
+        showMessage('Save Failed! Is storage full?', 'error');
     }
-    
-    updateGantt(rowData);
-}
-
-function updateSaveStatus(text, color = '#666') {
-    const statusElement = document.getElementById('save-status');
-    if (statusElement) {
-        statusElement.textContent = text;
-        statusElement.style.color = color;
-        
-        // Reset to "Ready" after 2 seconds
-        if (text !== 'Ready') {
-            setTimeout(() => {
-                updateSaveStatus('Ready');
-            }, 2000);
-        }
-    }
-}
-
-function showSaveReminder() {
-    // Create a subtle reminder to export data
-    const reminder = document.createElement('div');
-    reminder.style.cssText = `
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: #ff6b6b;
-        color: white;
-        padding: 10px 15px;
-        border-radius: 5px;
-        font-size: 14px;
-        z-index: 1000;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    `;
-    reminder.innerHTML = '⚠️ Data not auto-saving. Please export your project!';
-    document.body.appendChild(reminder);
-    
-    setTimeout(() => {
-        if (reminder.parentNode) {
-            reminder.parentNode.removeChild(reminder);
-        }
-    }, 5000);
 }
 
 function loadProject() {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     let rowData = [];
     if (savedData) {
-        try {
-            rowData = JSON.parse(savedData);
-        } catch (e) {
-            console.error('Error parsing saved data:', e);
-            rowData = [];
-        }
+        try { rowData = JSON.parse(savedData); } catch (e) { rowData = []; }
     }
     
-    // Always ensure there are plenty of empty rows ready to go (like Excel)
     if (rowData.length === 0) {
-        // Add a sample task to help users understand how to use it
-        rowData.push({ 
-            id: 1, 
-            name: 'Sample Task - Click to edit', 
-            duration: 5, 
-            start: '', 
-            finish: '', 
-            predecessors: '', 
-            resource: 'Team Member', 
-            notes: 'This is a sample task. Click on any cell to edit it!' 
-        });
-        // Add 20 empty rows ready to go (like Excel)
-        for (let i = 2; i <= 21; i++) {
-            rowData.push({ 
-                id: i, 
-                name: '', 
-                duration: 1, 
-                start: '', 
-                finish: '', 
-                predecessors: '', 
-                resource: '', 
-                notes: '' 
-            });
-        }
-    } else {
-        // Always ensure there are at least 10 empty rows at the end
-        const emptyRowsNeeded = 10;
-        const currentEmptyRows = rowData.filter(row => !row.name || row.name.trim() === '').length;
-        
-        if (currentEmptyRows < emptyRowsNeeded) {
-            const rowsToAdd = emptyRowsNeeded - currentEmptyRows;
-            for (let i = 0; i < rowsToAdd; i++) {
-                rowData.push({ 
-                    id: getNextId(), 
-                    name: '', 
-                    duration: 1, 
-                    start: '', 
-                    finish: '', 
-                    predecessors: '', 
-                    resource: '', 
-                    notes: '' 
-                });
-            }
-        }
+        rowData = [
+            { id: 1, name: 'Phase 1: Planning', duration: 0, parent_id: null },
+            { id: 2, name: 'Define scope', duration: 5, start: '01/01/2025', parent_id: 1 },
+            { id: 3, name: 'Create project plan', duration: 3, predecessors: '2', parent_id: 1 },
+        ];
+    }
+
+    // Always ensure there's an empty row at the end for typing
+    const lastRow = rowData[rowData.length - 1];
+    if (!lastRow || lastRow.name?.trim()) {
+        const newId = rowData.length > 0 ? Math.max(...rowData.map(t => t.id)) + 1 : 1;
+        rowData.push({ id: newId, name: '', duration: 1, parent_id: null });
     }
     
-    console.log('Loading project with', rowData.length, 'rows');
-    gridOptions.api.setRowData(rowData);
+    gridApi.setGridOption('rowData', rowData);
     updateGantt(rowData);
+    showMessage('Project loaded', 'info');
 }
 
 function exportProject() {
-    const rowData = [];
-    gridOptions.api.forEachNode(node => {
-        // Don't save the very last, empty row
-        if (node.data && node.data.name && node.data.name.trim() !== '') {
-             rowData.push(node.data);
-        }
-    });
-    
-    console.log('Exporting project with', rowData.length, 'tasks:', rowData);
-    
-    // Add metadata
-    const exportData = {
-        version: '1.0',
-        exportDate: new Date().toISOString(),
-        projectName: 'My Project',
-        tasks: rowData
-    };
-    
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const rowData = getAllNodes().map(n => n.data).filter(t => t.name?.trim());
+    const blob = new Blob([JSON.stringify(rowData, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `project-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
-    
-    // Show success message
-    showMessage(`Project exported successfully! (${rowData.length} tasks)`, 'success');
-}
-
-function autoExport() {
-    // Auto-export every 5 minutes if there are changes
-    const rowData = [];
-    gridOptions.api.forEachNode(node => {
-        // Don't save the very last, empty row
-        if (node.data && node.data.name && node.data.name.trim() !== '') {
-             rowData.push(node.data);
-        }
-    });
-    
-    if (rowData.length > 0) {
-        const exportData = {
-            version: '1.0',
-            exportDate: new Date().toISOString(),
-            projectName: 'Auto-saved Project',
-            tasks: rowData
-        };
-        
-        // Create a data URL for download
-        const dataStr = JSON.stringify(exportData, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
-        
-        // Store in a way that can be easily downloaded
-        window.autoExportData = dataBlob;
-        console.log('Auto-export ready. Click "Download Auto-Export" to save.');
-    }
-}
-
-function downloadAutoExport() {
-    if (window.autoExportData) {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(window.autoExportData);
-        a.download = `auto-save-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        showMessage('Auto-export downloaded!', 'success');
-    } else {
-        showMessage('No auto-export data available. Make some changes first.', 'warning');
-    }
-}
-
-function showMessage(text, type = 'info') {
-    const message = document.createElement('div');
-    const colors = {
-        success: '#4CAF50',
-        warning: '#FF9800',
-        error: '#f44336',
-        info: '#2196F3'
-    };
-    
-    message.style.cssText = `
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: ${colors[type] || colors.info};
-        color: white;
-        padding: 10px 15px;
-        border-radius: 5px;
-        font-size: 14px;
-        z-index: 1000;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        max-width: 300px;
-    `;
-    message.innerHTML = text;
-    document.body.appendChild(message);
-    
-    setTimeout(() => {
-        if (message.parentNode) {
-            message.parentNode.removeChild(message);
-        }
-    }, 3000);
+    showMessage('Project exported!', 'success');
 }
 
 function importProject(event) {
@@ -674,184 +368,77 @@ function importProject(event) {
     reader.onload = e => {
         try {
             const importedData = JSON.parse(e.target.result);
-            let tasks = [];
-            
-            // Handle both old format (array) and new format (object with tasks)
             if (Array.isArray(importedData)) {
-                tasks = importedData;
-            } else if (importedData.tasks && Array.isArray(importedData.tasks)) {
-                tasks = importedData.tasks;
-                showMessage(`Imported project: ${importedData.projectName || 'Unknown'}`, 'success');
-            } else {
-                throw new Error('Invalid project file format');
-            }
-            
-            if (tasks.length > 0) {
-                // Add empty rows for data entry (like loadProject does)
-                const emptyRowsNeeded = 10;
-                for (let i = 0; i < emptyRowsNeeded; i++) {
-                    tasks.push({ 
-                        id: getNextId() + i, 
-                        name: '', 
-                        duration: 1, 
-                        start: '', 
-                        finish: '', 
-                        predecessors: '', 
-                        resource: '', 
-                        notes: '' 
-                    });
-                }
-                
-                gridOptions.api.setRowData(tasks);
-                saveProject();
-                showMessage(`Imported ${tasks.length - emptyRowsNeeded} tasks successfully!`, 'success');
-            } else {
-                showMessage('No tasks found in the imported file.', 'warning');
-            }
-        } catch (error) {
-            showMessage('Error reading project file: ' + error.message, 'error');
-        }
+                gridApi.setGridOption('rowData', importedData);
+                addNewRow(importedData.length);
+                saveAndRefresh();
+                showMessage('Project imported successfully!', 'success');
+            } else { throw new Error('Invalid format'); }
+        } catch (error) { showMessage('Import failed: ' + error.message, 'error'); }
     };
     reader.readAsText(file);
-    event.target.value = ''; // Reset file input
+    event.target.value = '';
 }
 
 
-// --- GANTT CHART ---
+// --- GANTT CHART (Hardened Version) ---
 
 function updateGantt(tasks) {
     const ganttContainer = document.getElementById('gantt');
-    if (!ganttContainer) {
-        console.error('Gantt container not found!');
-        return;
-    }
-    
-    ganttContainer.innerHTML = ''; // Clear previous chart
-    console.log('updateGantt called with', tasks ? tasks.length : 0, 'tasks');
-    
-    if (!tasks || tasks.length === 0) {
-        console.log('No tasks to display in Gantt chart');
-        return;
-    }
+    ganttContainer.innerHTML = ''; // Always clear previous chart
+    if (!tasks || typeof Gantt === 'undefined') return;
 
-    // Filter tasks that have valid dates and names
     const ganttTasks = tasks
-        .filter(t => {
-            const hasName = t.name && t.name.trim() !== '';
-            const hasDates = t.start && t.finish && t.start.trim() !== '' && t.finish.trim() !== '';
-            console.log(`Task "${t.name}": hasName=${hasName}, hasDates=${hasDates}, start="${t.start}", finish="${t.finish}"`);
-            return hasName && hasDates;
-        })
+        .filter(t => t.name?.trim() && t.start && t.finish)
         .map(t => {
-            try {
-                const startDate = t.start.split('/').reverse().join('-'); // YYYY-MM-DD
-                const endDate = t.finish.split('/').reverse().join('-');   // YYYY-MM-DD
-                console.log(`Converting task "${t.name}": ${t.start} -> ${startDate}, ${t.finish} -> ${endDate}`);
-                return {
-                    id: String(t.id),
-                    name: t.name,
-                    start: startDate,
-                    end: endDate,
-                    progress: 0,
-                    dependencies: t.predecessors ? String(t.predecessors).split(';').map(p => p.trim()).filter(p => p) : []
-                };
-            } catch (e) {
-                console.warn('Error processing task for Gantt:', t, e);
-                return null;
-            }
-        })
-        .filter(t => t !== null);
-
-    console.log('Valid Gantt tasks:', ganttTasks);
+            // Frappe Gantt needs YYYY-MM-DD format
+            const start = t.start.split('/').reverse().join('-');
+            const end = t.finish.split('/').reverse().join('-');
+            return {
+                id: String(t.id),
+                name: t.name,
+                start: start,
+                end: end,
+                progress: 0,
+                dependencies: t.predecessors ? String(t.predecessors).split(';').map(p => p.trim()) : []
+            };
+        });
 
     if (ganttTasks.length > 0) {
         try {
-            // Check if Gantt library is loaded
-            if (typeof Gantt === 'undefined') {
-                console.error('Gantt library not loaded!');
-                showMessage('Gantt chart library not loaded', 'error');
-                return;
-            }
-            
-            // Create a simple test first
-            console.log('Creating Gantt with tasks:', ganttTasks);
-            
             gantt = new Gantt("#gantt", ganttTasks, {
                 bar_height: 20,
                 padding: 18,
                 view_mode: 'Day',
-                date_format: 'YYYY-MM-DD'
+                date_format: 'YYYY-MM-DD',
+                on_click: (task) => {
+                    const node = gridApi.getRowNode(task.id);
+                    if(node) {
+                        gridApi.ensureNodeVisible(node, 'middle');
+                        node.setSelected(true, true);
+                    }
+                }
             });
-            console.log('Gantt chart created successfully with', ganttTasks.length, 'tasks');
-            showMessage(`Gantt chart updated with ${ganttTasks.length} tasks`, 'success');
         } catch (e) {
-            console.error('Error creating Gantt chart:', e);
-            showMessage('Error creating Gantt chart: ' + e.message, 'error');
+            console.error("Gantt Error:", e);
+            ganttContainer.innerHTML = `<div style="text-align:center; padding: 20px; color: red;">Error rendering Gantt chart. Check data and dates.</div>`;
         }
     } else {
-        console.log('No valid tasks for Gantt chart - tasks need names and dates');
-        showMessage('Add task names and dates to see Gantt chart', 'info');
-        
-        // Show a simple test message in the Gantt area
-        ganttContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Add task names and dates, then click Recalculate to see Gantt chart</div>';
+        ganttContainer.innerHTML = `<div style="text-align:center; padding: 20px; color: #6c757d;">Add tasks with names and dates to see the Gantt chart.</div>`;
     }
 }
 
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, initializing app...');
-    
-    // Check if AG Grid is loaded
-    if (typeof agGrid === 'undefined') {
-        console.error('AG Grid not loaded!');
-        showMessage('Error: AG Grid library failed to load. Please refresh the page.', 'error');
-        return;
-    }
-    
-    // Check if Gantt is loaded
-    if (typeof Gantt === 'undefined') {
-        console.error('Frappe Gantt not loaded!');
-        showMessage('Warning: Gantt chart library failed to load. Grid will work but Gantt may not display.', 'warning');
-    }
-    
-    try {
-        const gridDiv = document.querySelector('#myGrid');
-        if (!gridDiv) {
-            console.error('Grid container not found!');
-            return;
-        }
-        
-        console.log('Creating AG Grid...');
-        new agGrid.Grid(gridDiv, gridOptions);
-        console.log('AG Grid created successfully');
-        
-        loadProject();
-        console.log('Project loaded');
-        
-        // Set up auto-export every 5 minutes
-        setInterval(autoExport, 5 * 60 * 1000); // 5 minutes
-        
-        // Auto-export on page unload
-        window.addEventListener('beforeunload', () => {
-            autoExport();
-        });
-        
-        console.log('App initialized successfully');
-    } catch (error) {
-        console.error('Error initializing app:', error);
-        showMessage('Error initializing application: ' + error.message, 'error');
-    }
+    const gridDiv = document.querySelector('#grid-wrapper');
+    // MODERN API: Use createGrid instead of new Grid(...)
+    gridApi = agGrid.createGrid(gridDiv, gridOptions);
+    loadProject();
 });
 
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
-    if (e.altKey && e.key === 'ArrowRight') {
-        e.preventDefault();
-        indentSelection();
-    }
-    if (e.altKey && e.key === 'ArrowLeft') {
-        e.preventDefault();
-        outdentSelection();
-    }
+    if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); indentSelection(); }
+    if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); outdentSelection(); }
 });

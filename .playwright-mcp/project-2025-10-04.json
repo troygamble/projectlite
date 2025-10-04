@@ -1,0 +1,36 @@
+[
+  {
+    "id": 1,
+    "name": "Phase 1: Planning",
+    "duration": 0,
+    "parent_id": null,
+    "is_summary": true,
+    "start": "01/01/2025",
+    "finish": "10/01/2025"
+  },
+  {
+    "id": 5,
+    "name": "New Task",
+    "duration": 1,
+    "parent_id": 1
+  },
+  {
+    "id": 2,
+    "name": "Define scope",
+    "duration": 5,
+    "start": "01/01/2025",
+    "parent_id": 1,
+    "is_summary": false,
+    "finish": "07/01/2025"
+  },
+  {
+    "id": 3,
+    "name": "Create project plan",
+    "duration": 3,
+    "predecessors": "2",
+    "parent_id": 1,
+    "is_summary": false,
+    "start": "08/01/2025",
+    "finish": "10/01/2025"
+  }
+]
