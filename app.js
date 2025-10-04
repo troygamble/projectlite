@@ -6,9 +6,11 @@ const LOCAL_STORAGE_KEY = 'myProjectData';
 const columnDefs = [
     { 
         field: "name", 
+        headerName: "Tasks",
         rowDrag: true,
         editable: true,
-        width: 200,
+        width: 250,
+        cellRenderer: 'agGroupCellRenderer',
         valueSetter: params => { // Magic for adding new rows
             params.data.name = params.newValue;
             const rowIndex = params.node.rowIndex;
