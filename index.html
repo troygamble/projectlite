@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fluid Project Tracker</title>
+    <!-- AG Grid -->
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+    <!-- Frappe Gantt -->
+    <script src="frappe-gantt.min.js"></script>
+    <link rel="stylesheet" href="frappe-gantt.css" />
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="main-container">
+        <div class="controls">
+            <button onclick="recalculateProject()">Recalculate</button>
+            <button onclick="indentSelection()">Indent (Alt+Right)</button>
+            <button onclick="outdentSelection()">Outdent (Alt+Left)</button>
+            <button onclick="exportProject()">Export to File</button>
+            <button onclick="downloadAutoExport()" style="background-color: #4CAF50; color: white;">Download Auto-Export</button>
+            <label class="file-input-label">
+                Import from File
+                <input type="file" id="import-file" onchange="importProject(event)" accept=".json">
+            </label>
+            <div id="status-indicator" style="margin-left: 10px; font-size: 12px; color: #666;">
+                <span id="save-status">Ready</span>
+            </div>
+        </div>
+
+        <div id="myGrid" class="ag-theme-alpine"></div>
+        
+        <div class="gantt-container">
+            <svg id="gantt"></svg>
+        </div>
+    </div>
+
+    <!-- Main Application Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
